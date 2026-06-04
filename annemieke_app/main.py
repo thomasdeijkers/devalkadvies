@@ -38,6 +38,41 @@ def dashboard(
     status: str | None = None,
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
+    return _render_workspace(request, session, "overview", project, status)
+
+
+@app.get("/documents", response_class=HTMLResponse)
+def documents_page(
+    request: Request,
+    project: str | None = None,
+    status: str | None = None,
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    return _render_workspace(request, session, "documents", project, status)
+
+
+@app.get("/relations", response_class=HTMLResponse)
+def relations_page(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
+    return _render_workspace(request, session, "relations")
+
+
+@app.get("/projects", response_class=HTMLResponse)
+def projects_page(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
+    return _render_workspace(request, session, "projects")
+
+
+@app.get("/server", response_class=HTMLResponse)
+def server_page(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
+    return _render_workspace(request, session, "server")
+
+
+def _render_workspace(
+    request: Request,
+    session: Session,
+    active_page: str,
+    project: str | None = None,
+    status: str | None = None,
+) -> HTMLResponse:
     document_query = select(IncomingDocument)
     if project:
         search = f"%{project.strip()}%"
@@ -83,6 +118,7 @@ def dashboard(
             "relation_options": relation_options,
             "selected_project": project or "",
             "selected_status": status or "",
+            "active_page": active_page,
             **status_context,
         },
     )
@@ -179,7 +215,7 @@ def create_relation(
         )
     )
     session.commit()
-    return RedirectResponse("/#relations", status_code=303)
+    return RedirectResponse("/relations", status_code=303)
 
 
 @app.post("/relations/{relation_id}")
@@ -211,7 +247,7 @@ def update_relation(
     relation.website = website.strip() or None
     relation.notes = notes.strip() or None
     session.commit()
-    return RedirectResponse(f"/#relation-{relation.id}", status_code=303)
+    return RedirectResponse(f"/relations#relation-{relation.id}", status_code=303)
 
 
 @app.post("/projects")
@@ -241,7 +277,7 @@ def create_project(
         )
     )
     session.commit()
-    return RedirectResponse("/#projects", status_code=303)
+    return RedirectResponse("/projects", status_code=303)
 
 
 @app.post("/projects/{project_id}")
@@ -271,7 +307,7 @@ def update_project(
     project.constructor_relation_id = _int_or_none(constructor_relation_id)
     project.notes = notes.strip() or None
     session.commit()
-    return RedirectResponse(f"/#project-{project.id}", status_code=303)
+    return RedirectResponse(f"/projects#project-{project.id}", status_code=303)
 
 
 @app.post("/documents/{document_id}/reparse-openai")

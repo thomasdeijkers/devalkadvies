@@ -1,9 +1,17 @@
 {% extends "base.html" %}
 
-{% block page_title %}Werkbak voor begrotingen{% endblock %}
+{% block page_title %}
+  {% if active_page == "documents" %}Inkomende stukken
+  {% elif active_page == "relations" %}Relaties
+  {% elif active_page == "projects" %}Projecten
+  {% elif active_page == "server" %}Server overzicht
+  {% else %}Werkbak voor begrotingen
+  {% endif %}
+{% endblock %}
 
 {% block content %}
 <section class="workspace">
+  {% if active_page in ["overview", "documents"] %}
   <section class="hero-band">
     <div>
       <span class="eyebrow accent">Automatisch</span>
@@ -25,7 +33,9 @@
       <button type="submit">Parser starten</button>
     </form>
   </section>
+  {% endif %}
 
+  {% if active_page == "overview" %}
   <div class="metrics">
     <article>
       <span>Totaal</span>
@@ -67,7 +77,9 @@
       <p>Na controle wordt een Excel opgebouwd in de gewenste begrotingskolommen.</p>
     </article>
   </section>
+  {% endif %}
 
+  {% if active_page == "server" %}
   <section class="server-overview">
     <div class="section-heading">
       <div>
@@ -122,7 +134,9 @@
       </article>
     </div>
   </section>
+  {% endif %}
 
+  {% if active_page == "relations" %}
   <section id="relations" class="data-grid">
     <article class="panel data-form-panel">
       <span class="chip manual">Aanvullen</span>
@@ -167,7 +181,9 @@
       </div>
     </article>
   </section>
+  {% endif %}
 
+  {% if active_page == "projects" %}
   <section id="projects" class="data-grid">
     <article class="panel data-form-panel">
       <span class="chip automatic">Projectkaart</span>
@@ -217,11 +233,13 @@
       </div>
     </article>
   </section>
+  {% endif %}
 
+  {% if active_page in ["overview", "documents"] %}
   <section id="documents" class="document-list">
     <div class="section-heading">
       <h2>Recente stukken</h2>
-      <form action="/" method="get" class="filter-form">
+      <form action="/documents" method="get" class="filter-form">
         <input name="project" value="{{ selected_project }}" placeholder="Zoek project">
         <select name="status">
           <option value="">Alle statussen</option>
@@ -273,13 +291,15 @@
       </div>
     {% endif %}
   </section>
+  {% endif %}
 </section>
 
+{% if active_page == "relations" %}
 {% for relation in relations %}
   <div id="relation-{{ relation.id }}" class="modal-card">
-    <a class="modal-backdrop" href="#relations"></a>
+    <a class="modal-backdrop" href="/relations"></a>
     <article class="modal-panel">
-      <a class="modal-close" href="#relations">Sluiten</a>
+      <a class="modal-close" href="/relations">Sluiten</a>
       <span class="entity-type">{{ relation.relation_type }}</span>
       <h2>{{ relation.name }}</h2>
       <div class="business-card">
@@ -313,12 +333,14 @@
     </article>
   </div>
 {% endfor %}
+{% endif %}
 
+{% if active_page == "projects" %}
 {% for project in projects %}
   <div id="project-{{ project.id }}" class="modal-card">
-    <a class="modal-backdrop" href="#projects"></a>
+    <a class="modal-backdrop" href="/projects"></a>
     <article class="modal-panel wide">
-      <a class="modal-close" href="#projects">Sluiten</a>
+      <a class="modal-close" href="/projects">Sluiten</a>
       <span class="entity-type">{{ project.status }}</span>
       <h2>{{ project.name }}</h2>
       <div class="project-summary">
@@ -362,4 +384,5 @@
     </article>
   </div>
 {% endfor %}
+{% endif %}
 {% endblock %}
