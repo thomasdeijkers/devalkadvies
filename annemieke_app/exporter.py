@@ -60,7 +60,7 @@ def budget_document_to_xlsx(document: IncomingDocument) -> BytesIO:
                 line.materieel,
                 line.onderaannemer,
                 line.totaal_prijs_per_regel,
-                line.eenheidsprijs,
+                _unit_price(line),
             ]
         )
 
@@ -115,6 +115,7 @@ def selected_budget_lines_to_xlsx(lines: list[BudgetLine]) -> BytesIO:
         "Ehd",
         "Eenheidsprijs",
         "Totaal",
+        "Score",
         "Status",
     ]
     sheet.append(headers)
@@ -138,11 +139,12 @@ def selected_budget_lines_to_xlsx(lines: list[BudgetLine]) -> BytesIO:
                 line.eenheid or "",
                 _unit_price(line),
                 line.totaal_prijs_per_regel,
+                line.confidence,
                 document.status,
             ]
         )
 
-    widths = [13, 26, 16, 24, 32, 48, 10, 8, 14, 14, 14]
+    widths = [13, 26, 16, 24, 32, 48, 10, 8, 14, 14, 10, 14]
     for index, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = width
 
@@ -152,9 +154,10 @@ def selected_budget_lines_to_xlsx(lines: list[BudgetLine]) -> BytesIO:
             cell.border = Border(bottom=Side(style="hair", color="D9D9D9"))
         row[8].number_format = u'€ #,##0.00'
         row[9].number_format = u'€ #,##0.00'
+        row[10].number_format = '0"%"'
 
     last_row = max(len(lines) + 1, 1)
-    table = Table(displayName="RaadplegenSelectie", ref=f"A1:K{last_row}")
+    table = Table(displayName="RaadplegenSelectie", ref=f"A1:L{last_row}")
     table.tableStyleInfo = TableStyleInfo(
         name="TableStyleMedium2",
         showFirstColumn=False,
@@ -164,7 +167,7 @@ def selected_budget_lines_to_xlsx(lines: list[BudgetLine]) -> BytesIO:
     )
     sheet.add_table(table)
     sheet.freeze_panes = "A2"
-    sheet.auto_filter.ref = f"A1:K{last_row}"
+    sheet.auto_filter.ref = f"A1:L{last_row}"
 
     stream = BytesIO()
     workbook.save(stream)

@@ -21,7 +21,6 @@
       <button name="status" value="needs_review" type="submit">Te controleren</button>
       <button name="status" value="archived" type="submit">Archiveren</button>
       <a class="button-link" href="/documents/{{ document.id }}/export.xlsx">Excel</a>
-      <a class="button-link" href="#pdf-viewer">PDF openen</a>
     </form>
     <form action="/documents/{{ document.id }}/reparse-openai" method="post" class="status-form">
       <button type="submit">Opnieuw parsen met OpenAI</button>
@@ -89,6 +88,7 @@
           <span>O.A.</span>
           <span>Eenheidsprijs</span>
           <span>Totaal</span>
+          <span>Score</span>
           <span>Weg</span>
         </div>
         {% for line in document.budget_lines %}
@@ -102,8 +102,9 @@
             <input name="materiaal" value="{{ line.materiaal or '' }}">
             <input name="materieel" value="{{ line.materieel or '' }}">
             <input name="onderaannemer" value="{{ line.onderaannemer or '' }}">
-            <input name="eenheidsprijs" value="{{ line.eenheidsprijs or '' }}">
+            <input name="eenheidsprijs" value="{{ line|unit_price|amount }}">
             <input name="totaal_prijs_per_regel" value="{{ line.totaal_prijs_per_regel or '' }}">
+            <span class="confidence-badge {% if line.confidence < 60 %}low{% elif line.confidence < 80 %}mid{% else %}high{% endif %}">{{ line.confidence }}%</span>
             <label class="delete-check" title="Deze regel verwijderen bij opslaan">
               <input type="checkbox" name="delete_line_id" value="{{ line.id }}">
             </label>
@@ -158,14 +159,4 @@
   </article>
 </section>
 
-<div id="pdf-viewer" class="pdf-modal">
-  <a class="modal-backdrop" href="/documents/{{ document.id }}"></a>
-  <article class="pdf-panel">
-    <div class="pdf-header">
-      <strong>{{ document.original_filename }}</strong>
-      <a class="modal-close" href="/documents/{{ document.id }}">Sluiten</a>
-    </div>
-    <iframe src="/documents/{{ document.id }}/original.pdf" title="Originele PDF"></iframe>
-  </article>
-</div>
 {% endblock %}

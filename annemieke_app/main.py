@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Upload
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.orm import Session, aliased
 
 from .config import settings
@@ -106,6 +106,8 @@ def consult_page(
     status: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    priced: str | None = None,
+    min_score: str | None = None,
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     return _render_workspace(
@@ -116,6 +118,8 @@ def consult_page(
         query=q,
         date_from=date_from,
         date_to=date_to,
+        priced=priced,
+        min_score=min_score,
     )
 
 
@@ -153,6 +157,8 @@ def _render_workspace(
     query: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    priced: str | None = None,
+    min_score: str | None = None,
 ) -> HTMLResponse:
     document_query = select(IncomingDocument)
     if project:
@@ -184,7 +190,7 @@ def _render_workspace(
     index_series = session.scalars(select(PriceIndexSeries).order_by(PriceIndexSeries.name)).all()
     scheduled_jobs = session.scalars(select(ScheduledJob).order_by(ScheduledJob.created_at.desc())).all()
     status_context = _status_context(session)
-    consult_lines = _consult_lines(session, query, status, date_from, date_to) if active_page == "consult" else []
+    consult_lines = _consult_lines(session, query, status, date_from, date_to, priced, min_score) if active_page == "consult" else []
 
     return templates.TemplateResponse(
         request=request,
@@ -207,6 +213,8 @@ def _render_workspace(
             "selected_status": status or "",
             "selected_date_from": date_from or "",
             "selected_date_to": date_to or "",
+            "selected_priced": priced or "",
+            "selected_min_score": min_score or "",
             "consult_lines": consult_lines,
             "active_page": active_page,
             **status_context,
@@ -798,9 +806,11 @@ def export_consult_selection(
     status: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    priced: str | None = None,
+    min_score: str | None = None,
     session: Session = Depends(get_session),
 ) -> StreamingResponse:
-    lines = _consult_lines(session, q, status, date_from, date_to, limit=5000)
+    lines = _consult_lines(session, q, status, date_from, date_to, priced, min_score, limit=5000)
     stream = selected_budget_lines_to_xlsx(lines)
     return StreamingResponse(
         stream,
@@ -853,6 +863,8 @@ def _consult_lines(
     status: str | None,
     date_from: str | None,
     date_to: str | None,
+    priced: str | None = None,
+    min_score: str | None = None,
     limit: int = 300,
 ) -> list[BudgetLine]:
     client_relation = aliased(Relation)
@@ -887,6 +899,20 @@ def _consult_lines(
         )
     if status:
         statement = statement.where(IncomingDocument.status == status)
+    if priced:
+        statement = statement.where(
+            or_(
+                BudgetLine.eenheidsprijs.is_not(None),
+                and_(
+                    BudgetLine.totaal_prijs_per_regel.is_not(None),
+                    BudgetLine.hoeveelheid.is_not(None),
+                    BudgetLine.hoeveelheid != 0,
+                ),
+            )
+        )
+    minimum_score = _int_or_none(min_score)
+    if minimum_score is not None:
+        statement = statement.where(BudgetLine.confidence >= minimum_score)
     parsed_from = _date_or_none(date_from)
     if parsed_from:
         statement = statement.where(IncomingDocument.created_at >= parsed_from)

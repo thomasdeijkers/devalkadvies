@@ -478,8 +478,17 @@ button:hover {
 
 .consult-form {
   display: grid;
-  grid-template-columns: minmax(260px, 1.7fr) minmax(160px, 0.7fr) 150px 150px 120px 150px;
+  grid-template-columns: minmax(260px, 1.6fr) minmax(150px, 0.7fr) 145px 145px 150px 130px 110px 145px;
   gap: 10px;
+}
+
+.consult-priced {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(2, 22, 43, 0.76);
+  color: var(--soft);
 }
 
 .consult-results {
@@ -495,10 +504,10 @@ button:hover {
 
 .consult-row {
   display: grid;
-  grid-template-columns: 92px minmax(210px, 1fr) minmax(180px, 0.9fr) minmax(320px, 1.35fr) 78px 62px 92px 100px 105px;
+  grid-template-columns: 92px minmax(210px, 1fr) minmax(180px, 0.9fr) minmax(300px, 1.3fr) 78px 62px 96px 104px 70px 105px 74px;
   gap: 10px;
   align-items: center;
-  min-width: 1260px;
+  min-width: 1380px;
   padding: 9px 10px;
   color: var(--soft);
   border-top: 1px solid rgba(126, 169, 219, 0.16);
@@ -527,6 +536,15 @@ button:hover {
   color: #fff;
 }
 
+.inline-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.inline-link:hover strong {
+  color: var(--accent);
+}
+
 .consult-row small {
   color: var(--muted);
   font-size: 12px;
@@ -535,6 +553,46 @@ button:hover {
 .consult-row > span {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.confidence-badge {
+  display: inline-grid;
+  min-width: 52px;
+  min-height: 26px;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(42, 224, 137, 0.18);
+  color: #44f0a3;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.confidence-badge.mid {
+  background: rgba(255, 199, 84, 0.18);
+  color: #ffd15a;
+}
+
+.confidence-badge.low {
+  background: rgba(255, 96, 62, 0.18);
+  color: #ff8a6d;
+}
+
+.pdf-button {
+  display: inline-grid;
+  min-width: 58px;
+  min-height: 32px;
+  place-items: center;
+  border: 1px solid rgba(83, 180, 206, 0.62);
+  border-radius: 7px;
+  background: rgba(83, 180, 206, 0.16);
+  color: #dff8ff;
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.pdf-button:hover {
+  background: rgba(83, 180, 206, 0.3);
 }
 
 .file-picker {
@@ -1120,10 +1178,10 @@ textarea {
 
 .budget-row {
   display: grid;
-  grid-template-columns: minmax(250px, 1.45fr) 78px 62px 74px 74px 90px 90px 90px 108px 108px 44px;
+  grid-template-columns: minmax(250px, 1.45fr) 78px 62px 74px 74px 90px 90px 90px 108px 108px 58px 44px;
   gap: 8px;
   align-items: center;
-  min-width: 1080px;
+  min-width: 1140px;
   min-height: 38px;
   padding: 6px 10px;
   border-top: 1px solid rgba(126, 169, 219, 0.18);
