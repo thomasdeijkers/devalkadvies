@@ -15,7 +15,17 @@ from sqlalchemy.orm import Session, aliased
 from .config import settings
 from .database import create_db, engine, get_session
 from .exporter import budget_document_to_xlsx
-from .models import BudgetLine, ExtractedField, IncomingDocument, OpenAIUsageEvent, Project, Relation
+from .index_provider import sync_price_index_series
+from .models import (
+    BudgetLine,
+    ExtractedField,
+    IncomingDocument,
+    OpenAIUsageEvent,
+    PriceIndexSeries,
+    Project,
+    Relation,
+    ScheduledJob,
+)
 from .parser import parse_pdf
 
 
@@ -100,6 +110,16 @@ def server_page(request: Request, session: Session = Depends(get_session)) -> HT
     return _render_workspace(request, session, "server")
 
 
+@app.get("/indices", response_class=HTMLResponse)
+def indices_page(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
+    return _render_workspace(request, session, "indices")
+
+
+@app.get("/jobs", response_class=HTMLResponse)
+def jobs_page(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
+    return _render_workspace(request, session, "jobs")
+
+
 def _render_workspace(
     request: Request,
     session: Session,
@@ -137,6 +157,8 @@ def _render_workspace(
     relation_options = session.scalars(
         select(Relation).order_by(Relation.name)
     ).all()
+    index_series = session.scalars(select(PriceIndexSeries).order_by(PriceIndexSeries.name)).all()
+    scheduled_jobs = session.scalars(select(ScheduledJob).order_by(ScheduledJob.created_at.desc())).all()
     status_context = _status_context(session)
     consult_lines = _consult_lines(session, query, status, date_from, date_to) if active_page == "consult" else []
 
@@ -154,6 +176,8 @@ def _render_workspace(
             "relations": relations,
             "project_options": project_options,
             "relation_options": relation_options,
+            "index_series": index_series,
+            "scheduled_jobs": scheduled_jobs,
             "selected_project": project or "",
             "selected_query": query or "",
             "selected_status": status or "",
@@ -352,6 +376,79 @@ def update_project(
     return RedirectResponse(f"/projects#project-{project.id}", status_code=303)
 
 
+@app.post("/indices")
+def create_index_series(
+    name: str = Form(...),
+    description: str = Form(""),
+    source: str = Form(""),
+    provider: str = Form("cbs"),
+    api_url: str = Form(""),
+    period_field: str = Form(""),
+    value_field: str = Form(""),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    series = PriceIndexSeries(
+        name=name.strip(),
+        description=description.strip() or None,
+        source=source.strip() or None,
+        provider=provider.strip() or "manual",
+        api_url=api_url.strip() or None,
+        period_field=period_field.strip() or None,
+        value_field=value_field.strip() or None,
+    )
+    session.add(series)
+    session.commit()
+    return RedirectResponse("/indices", status_code=303)
+
+
+@app.post("/indices/{series_id}/sync")
+def sync_index_series(series_id: int, session: Session = Depends(get_session)) -> RedirectResponse:
+    series = session.get(PriceIndexSeries, series_id)
+    if series is None:
+        raise HTTPException(status_code=404, detail="Indexreeks niet gevonden.")
+    sync_price_index_series(session, series)
+    return RedirectResponse("/indices", status_code=303)
+
+
+@app.post("/jobs")
+def create_scheduled_job(
+    name: str = Form(...),
+    job_type: str = Form("index_sync"),
+    cron_expression: str = Form("0 5 1 * *"),
+    target_id: str = Form(""),
+    enabled: str = Form("1"),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    session.add(
+        ScheduledJob(
+            name=name.strip(),
+            job_type=job_type.strip() or "index_sync",
+            cron_expression=cron_expression.strip() or "0 5 1 * *",
+            target_id=_int_or_none(target_id),
+            enabled=1 if enabled else 0,
+        )
+    )
+    session.commit()
+    return RedirectResponse("/jobs", status_code=303)
+
+
+@app.post("/jobs/{job_id}/run")
+def run_scheduled_job(job_id: int, session: Session = Depends(get_session)) -> RedirectResponse:
+    job = session.get(ScheduledJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Cronjob niet gevonden.")
+    try:
+        count = _run_job(session, job)
+        job.last_status = "ok"
+        job.last_message = f"{count} waarden bijgewerkt"
+    except Exception as exc:
+        job.last_status = "fout"
+        job.last_message = str(exc)[:500]
+    job.last_run_at = datetime.now(timezone.utc)
+    session.commit()
+    return RedirectResponse("/jobs", status_code=303)
+
+
 @app.post("/documents/{document_id}/reparse-openai")
 def reparse_document_with_openai(
     document_id: int,
@@ -412,6 +509,7 @@ def document_detail(
             "app_name": settings.app_name,
             "document": document,
             "project_options": session.scalars(select(Project).order_by(Project.name)).all(),
+            "relation_options": session.scalars(select(Relation).order_by(Relation.name)).all(),
             **_status_context(session),
         },
     )
@@ -421,6 +519,7 @@ def document_detail(
 def update_document_meta(
     document_id: int,
     project_id: str = Form(""),
+    relation_id: str = Form(""),
     project_name: str = Form(""),
     document_type: str = Form(""),
     source: str = Form(""),
@@ -431,10 +530,13 @@ def update_document_meta(
         raise HTTPException(status_code=404, detail="Document niet gevonden.")
 
     selected_project = session.get(Project, _int_or_none(project_id)) if _int_or_none(project_id) else None
+    selected_relation = session.get(Relation, _int_or_none(relation_id)) if _int_or_none(relation_id) else None
     document.project_id = selected_project.id if selected_project else None
     document.project_name = project_name.strip() or (selected_project.name if selected_project else None)
     document.document_type = document_type.strip() or None
     document.source = source.strip() or None
+    if selected_project and selected_relation:
+        selected_project.client_relation_id = selected_relation.id
     session.commit()
     return RedirectResponse(f"/documents/{document.id}", status_code=303)
 
@@ -732,6 +834,20 @@ def _consult_lines(
     return session.scalars(
         statement.order_by(IncomingDocument.created_at.desc(), BudgetLine.line_number).limit(300)
     ).unique().all()
+
+
+def _run_job(session: Session, job: ScheduledJob) -> int:
+    if job.job_type == "index_sync":
+        if job.target_id:
+            series = session.get(PriceIndexSeries, job.target_id)
+            if series is None:
+                raise ValueError("Indexreeks niet gevonden.")
+            return sync_price_index_series(session, series)
+        total = 0
+        for series in session.scalars(select(PriceIndexSeries).where(PriceIndexSeries.api_url.is_not(None))).all():
+            total += sync_price_index_series(session, series)
+        return total
+    raise ValueError("Onbekend jobtype.")
 
 
 def _date_or_none(value: str | None) -> datetime | None:

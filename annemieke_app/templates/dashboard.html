@@ -5,6 +5,8 @@
   {% elif active_page == "consult" %}Raadplegen
   {% elif active_page == "relations" %}Relaties
   {% elif active_page == "projects" %}Projecten
+  {% elif active_page == "indices" %}Indexering
+  {% elif active_page == "jobs" %}Cronjobs
   {% elif active_page == "server" %}Server overzicht
   {% else %}Werkbak voor begrotingen
   {% endif %}
@@ -232,6 +234,93 @@
         <i style="width: 80%"></i>
       </article>
     </div>
+  </section>
+  {% endif %}
+
+  {% if active_page == "indices" %}
+  <section class="data-grid">
+    <article class="panel data-form-panel">
+      <span class="chip automatic">Indexbron</span>
+      <h3>Nieuwe indexreeks</h3>
+      <form action="/indices" method="post" class="stack-form">
+        <input name="name" placeholder="Naam indexreeks" required>
+        <input name="source" placeholder="Bron, bijvoorbeeld CBS StatLine">
+        <select name="provider">
+          <option value="cbs">CBS / OData</option>
+          <option value="manual">Handmatig</option>
+          <option value="custom">Eigen API</option>
+        </select>
+        <input name="api_url" placeholder="API URL met maandwaarden">
+        <input name="period_field" placeholder="Veld voor maand/periode">
+        <input name="value_field" placeholder="Veld voor indexwaarde">
+        <textarea name="description" placeholder="Omschrijving"></textarea>
+        <button type="submit">Indexreeks opslaan</button>
+      </form>
+    </article>
+    <article class="panel">
+      <span class="chip automatic">Maandindex</span>
+      <h3>Beschikbare indexreeksen</h3>
+      <div class="entity-list">
+        {% for series in index_series %}
+          <article>
+            <strong>{{ series.name }}</strong>
+            <span>{{ series.source or series.provider }}{% if series.last_synced_at %} · laatst bijgewerkt {{ series.last_synced_at.strftime("%d-%m-%Y") }}{% endif %}</span>
+            <form action="/indices/{{ series.id }}/sync" method="post">
+              <button class="mini-button" type="submit">Synchroniseren</button>
+            </form>
+          </article>
+        {% else %}
+          <p class="muted">Nog geen indexreeksen toegevoegd.</p>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+  {% endif %}
+
+  {% if active_page == "jobs" %}
+  <section class="data-grid">
+    <article class="panel data-form-panel">
+      <span class="chip automatic">Automatisch</span>
+      <h3>Nieuwe cronjob</h3>
+      <form action="/jobs" method="post" class="stack-form">
+        <input name="name" placeholder="Naam job" required>
+        <select name="job_type">
+          <option value="index_sync">Indexreeksen synchroniseren</option>
+        </select>
+        <select name="target_id">
+          <option value="">Alle indexreeksen</option>
+          {% for series in index_series %}
+            <option value="{{ series.id }}">{{ series.name }}</option>
+          {% endfor %}
+        </select>
+        <input name="cron_expression" value="0 5 1 * *" placeholder="Cron, bv. 0 5 1 * *">
+        <label class="check-row">
+          <input type="checkbox" name="enabled" value="1" checked>
+          <span>Actief</span>
+        </label>
+        <button type="submit">Cronjob opslaan</button>
+      </form>
+    </article>
+    <article class="panel">
+      <span class="chip automatic">Planning</span>
+      <h3>Ingestelde cronjobs</h3>
+      <div class="entity-list">
+        {% for job in scheduled_jobs %}
+          <article>
+            <strong>{{ job.name }}</strong>
+            <span>{{ job.job_type }} · {{ job.cron_expression }} · {% if job.enabled %}actief{% else %}uit{% endif %}</span>
+            {% if job.last_run_at %}
+              <span>Laatst: {{ job.last_run_at.strftime("%d-%m-%Y %H:%M") }} · {{ job.last_status or "-" }}{% if job.last_message %} · {{ job.last_message }}{% endif %}</span>
+            {% endif %}
+            <form action="/jobs/{{ job.id }}/run" method="post">
+              <button class="mini-button" type="submit">Nu uitvoeren</button>
+            </form>
+          </article>
+        {% else %}
+          <p class="muted">Nog geen cronjobs ingesteld.</p>
+        {% endfor %}
+      </div>
+    </article>
   </section>
   {% endif %}
 

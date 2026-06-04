@@ -994,6 +994,31 @@ textarea {
   margin-top: 14px;
 }
 
+.select-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.select-action .mini-button {
+  min-height: 42px;
+  white-space: nowrap;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--soft);
+  font-weight: 800;
+}
+
+.check-row input {
+  width: 17px;
+  height: 17px;
+}
+
 .note {
   margin-top: 14px;
   padding: 10px 12px;

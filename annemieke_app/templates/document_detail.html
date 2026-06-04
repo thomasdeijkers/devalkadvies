@@ -27,13 +27,25 @@
     </form>
 
     <form action="/documents/{{ document.id }}/meta" method="post" class="meta-form">
-      <select name="project_id">
-        <option value="">Geen projectkoppeling</option>
-        {% for project in project_options %}
-          <option value="{{ project.id }}" {% if document.project_id == project.id %}selected{% endif %}>{{ project.project_number or "zonder nr" }} - {{ project.name }}</option>
-        {% endfor %}
-      </select>
-      <input name="project_name" value="{{ document.project_name or '' }}" placeholder="Projectnaam">
+      <label class="select-action">
+        <select name="project_id">
+          <option value="">Selecteer project</option>
+          {% for project in project_options %}
+            <option value="{{ project.id }}" {% if document.project_id == project.id %}selected{% endif %}>{{ project.project_number or "zonder nr" }} - {{ project.name }}</option>
+          {% endfor %}
+        </select>
+        <a href="/projects" class="mini-button">Nieuw project</a>
+      </label>
+      <label class="select-action">
+        <select name="relation_id">
+          <option value="">Selecteer relatie</option>
+          {% for relation in relation_options %}
+            <option value="{{ relation.id }}" {% if document.project and document.project.client_relation_id == relation.id %}selected{% endif %}>{{ relation.name }}{% if relation.relation_type %} - {{ relation.relation_type }}{% endif %}</option>
+          {% endfor %}
+        </select>
+        <a href="/relations" class="mini-button">Nieuwe relatie</a>
+      </label>
+      <input name="project_name" value="{{ document.project_name or '' }}" placeholder="Projectnaam alleen gebruiken als project nog niet is aangemaakt">
       <input name="document_type" value="{{ document.document_type or '' }}" placeholder="Documenttype">
       <input name="source" value="{{ document.source or '' }}" placeholder="Bron / leverancier">
       <button type="submit">Opslaan</button>

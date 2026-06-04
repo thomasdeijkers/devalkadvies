@@ -57,6 +57,20 @@ def _apply_lightweight_migrations() -> None:
                 with engine.begin() as connection:
                     connection.execute(text(statement))
 
+    if "price_index_series" in inspector.get_table_names():
+        series_columns = {column["name"] for column in inspector.get_columns("price_index_series")}
+        series_migrations = {
+            "provider": "ALTER TABLE price_index_series ADD COLUMN provider VARCHAR(60) DEFAULT 'manual'",
+            "api_url": "ALTER TABLE price_index_series ADD COLUMN api_url TEXT",
+            "period_field": "ALTER TABLE price_index_series ADD COLUMN period_field VARCHAR(120)",
+            "value_field": "ALTER TABLE price_index_series ADD COLUMN value_field VARCHAR(120)",
+            "last_synced_at": "ALTER TABLE price_index_series ADD COLUMN last_synced_at TIMESTAMP",
+        }
+        for column_name, statement in series_migrations.items():
+            if column_name not in series_columns:
+                with engine.begin() as connection:
+                    connection.execute(text(statement))
+
 
 def get_session() -> Generator[Session, None, None]:
     session = SessionLocal()

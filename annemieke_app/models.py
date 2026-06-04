@@ -138,6 +138,11 @@ class PriceIndexSeries(Base):
     name: Mapped[str] = mapped_column(String(160), nullable=False, unique=True, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     source: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    provider: Mapped[str] = mapped_column(String(60), default="manual", index=True)
+    api_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    period_field: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    value_field: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     base_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -161,6 +166,22 @@ class PriceIndexValue(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     series: Mapped["PriceIndexSeries"] = relationship(back_populates="values")
+
+
+class ScheduledJob(Base):
+    __tablename__ = "scheduled_jobs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(160), nullable=False, index=True)
+    job_type: Mapped[str] = mapped_column(String(80), default="index_sync", index=True)
+    cron_expression: Mapped[str] = mapped_column(String(80), default="0 5 1 * *")
+    target_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    enabled: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_status: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    last_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class OpenAIUsageEvent(Base):
