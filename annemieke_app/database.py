@@ -42,6 +42,21 @@ def _apply_lightweight_migrations() -> None:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE incoming_documents ADD COLUMN project_id INTEGER"))
 
+    if "budget_lines" in inspector.get_table_names():
+        budget_line_columns = {column["name"] for column in inspector.get_columns("budget_lines")}
+        budget_line_migrations = {
+            "price_index_series_id": "ALTER TABLE budget_lines ADD COLUMN price_index_series_id INTEGER",
+            "base_price_date": "ALTER TABLE budget_lines ADD COLUMN base_price_date TIMESTAMP",
+            "indexed_eenheidsprijs": "ALTER TABLE budget_lines ADD COLUMN indexed_eenheidsprijs NUMERIC(14, 2)",
+            "indexed_totaal_prijs_per_regel": (
+                "ALTER TABLE budget_lines ADD COLUMN indexed_totaal_prijs_per_regel NUMERIC(14, 2)"
+            ),
+        }
+        for column_name, statement in budget_line_migrations.items():
+            if column_name not in budget_line_columns:
+                with engine.begin() as connection:
+                    connection.execute(text(statement))
+
 
 def get_session() -> Generator[Session, None, None]:
     session = SessionLocal()

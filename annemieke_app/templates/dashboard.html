@@ -128,26 +128,45 @@
       <input name="date_to" type="date" value="{{ selected_date_to }}">
       <button type="submit">Zoeken</button>
     </form>
-    <div class="consult-results">
-      {% if consult_documents %}
-        {% for document in consult_documents %}
-          <article class="consult-card">
-            <div>
-              <span class="eyebrow">{{ document.created_at.strftime("%d-%m-%Y") if document.created_at else "Geen datum" }}</span>
-              <h3><a href="/documents/{{ document.id }}">{{ document.project.name if document.project else document.project_name or "Geen project gekoppeld" }}</a></h3>
-              <p>{{ document.original_filename }}</p>
-            </div>
-            <div class="consult-meta">
-              <span><strong>{{ document.project.project_number if document.project and document.project.project_number else "-" }}</strong> projectnr</span>
-              <span><strong>{{ document.budget_lines|length }}</strong> regels</span>
-              <span><mark class="status {{ document.status }}">{{ document.status }}</mark></span>
-            </div>
-            <div class="consult-lines">
-              {% for line in document.budget_lines[:3] %}
-                <span>{{ line.omschrijving_werkzaamheden }}</span>
-              {% endfor %}
-            </div>
-          </article>
+    <div class="consult-results consult-table">
+      {% if consult_lines %}
+        <div class="consult-row consult-head">
+          <span>Datum</span>
+          <span>Project</span>
+          <span>Relatie</span>
+          <span>Omschrijving</span>
+          <span>Hvh</span>
+          <span>Ehd</span>
+          <span>Ehprijs</span>
+          <span>Totaal</span>
+          <span>Status</span>
+        </div>
+        {% for line in consult_lines %}
+          {% set document = line.document %}
+          {% set project = document.project %}
+          <a class="consult-row" href="/documents/{{ document.id }}">
+            <span>{{ document.created_at.strftime("%d-%m-%Y") if document.created_at else "-" }}</span>
+            <span>
+              <strong>{{ project.name if project else document.project_name or "Geen project" }}</strong>
+              <small>{{ project.project_number if project and project.project_number else document.original_filename }}</small>
+            </span>
+            <span>
+              {{ project.client.name if project and project.client else document.source or "-" }}
+              {% if project and project.architect %}<small>Architect: {{ project.architect.name }}</small>{% endif %}
+            </span>
+            <span>{{ line.omschrijving_werkzaamheden }}</span>
+            <span>{{ line.hoeveelheid or "" }}</span>
+            <span>{{ line.eenheid or "" }}</span>
+            <span>
+              {{ line.eenheidsprijs|euro }}
+              {% if line.indexed_eenheidsprijs %}<small>Index: {{ line.indexed_eenheidsprijs|euro }}</small>{% endif %}
+            </span>
+            <span>
+              {{ line.totaal_prijs_per_regel|euro }}
+              {% if line.indexed_totaal_prijs_per_regel %}<small>Index: {{ line.indexed_totaal_prijs_per_regel|euro }}</small>{% endif %}
+            </span>
+            <span><mark class="status {{ document.status }}">{{ document.status }}</mark></span>
+          </a>
         {% endfor %}
       {% else %}
         <div class="empty-state">

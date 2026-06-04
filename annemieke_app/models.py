@@ -120,10 +120,47 @@ class BudgetLine(Base):
     onderaannemer: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     totaal_prijs_per_regel: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     eenheidsprijs: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    price_index_series_id: Mapped[int | None] = mapped_column(ForeignKey("price_index_series.id"), nullable=True, index=True)
+    base_price_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    indexed_eenheidsprijs: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    indexed_totaal_prijs_per_regel: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     confidence: Mapped[int] = mapped_column(Integer, default=50)
     raw_text: Mapped[str] = mapped_column(Text, default="")
 
     document: Mapped[IncomingDocument] = relationship(back_populates="budget_lines")
+    price_index_series: Mapped["PriceIndexSeries | None"] = relationship(back_populates="budget_lines")
+
+
+class PriceIndexSeries(Base):
+    __tablename__ = "price_index_series"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(160), nullable=False, unique=True, index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    base_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    values: Mapped[list["PriceIndexValue"]] = relationship(
+        back_populates="series",
+        cascade="all, delete-orphan",
+        order_by="PriceIndexValue.effective_date",
+    )
+    budget_lines: Mapped[list["BudgetLine"]] = relationship(back_populates="price_index_series")
+
+
+class PriceIndexValue(Base):
+    __tablename__ = "price_index_values"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    series_id: Mapped[int] = mapped_column(ForeignKey("price_index_series.id"), index=True)
+    effective_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    index_value: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    series: Mapped["PriceIndexSeries"] = relationship(back_populates="values")
 
 
 class OpenAIUsageEvent(Base):

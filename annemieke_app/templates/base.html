@@ -9,7 +9,8 @@
   </head>
   <body>
     <div class="app-layout">
-      <aside class="sidebar">
+      <aside class="sidebar" id="mobile-menu">
+        <button class="mobile-close" type="button" data-menu-close aria-label="Menu sluiten">×</button>
         <a class="brand-card" href="/">
           <span class="logo-frame">
             <img src="/logo.webp" alt="DeValk advies">
@@ -64,8 +65,14 @@
           </div>
         </div>
       </aside>
+      <button class="menu-backdrop" type="button" data-menu-close aria-label="Menu sluiten"></button>
       <main class="main-panel">
         <header class="topbar">
+          <button class="hamburger-button" type="button" data-menu-toggle aria-controls="mobile-menu" aria-expanded="false">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
           <div>
             <span class="eyebrow">Bouwkostenadvies</span>
             <h1>{% block page_title %}Werkbak voor begrotingen{% endblock %}</h1>
@@ -132,6 +139,17 @@
           });
         });
       });
+
+      const menuToggle = document.querySelector("[data-menu-toggle]");
+      const menuCloseButtons = document.querySelectorAll("[data-menu-close]");
+      const setMenuOpen = (isOpen) => {
+        document.body.classList.toggle("menu-open", isOpen);
+        if (menuToggle) menuToggle.setAttribute("aria-expanded", String(isOpen));
+      };
+      if (menuToggle) {
+        menuToggle.addEventListener("click", () => setMenuOpen(!document.body.classList.contains("menu-open")));
+      }
+      menuCloseButtons.forEach((button) => button.addEventListener("click", () => setMenuOpen(false)));
     </script>
   </body>
 </html>

@@ -55,6 +55,12 @@ a {
   border-right: 1px solid var(--line);
 }
 
+.mobile-close,
+.hamburger-button,
+.menu-backdrop {
+  display: none;
+}
+
 .brand-card {
   display: grid;
   grid-template-columns: 56px 1fr;
@@ -235,12 +241,36 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   min-height: 66px;
   padding: 16px 18px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: rgba(8, 31, 58, 0.82);
   box-shadow: var(--shadow);
+}
+
+.topbar > div:first-of-type {
+  min-width: 0;
+  margin-right: auto;
+}
+
+.hamburger-button {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid rgba(126, 169, 219, 0.42);
+  border-radius: 7px;
+  background: rgba(4, 19, 38, 0.58);
+}
+
+.hamburger-button span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  margin: 4px auto;
+  border-radius: 999px;
+  background: #fff;
 }
 
 .topbar h1 {
@@ -454,66 +484,57 @@ button:hover {
 
 .consult-results {
   display: grid;
-  gap: 10px;
+  gap: 0;
 }
 
-.consult-card {
-  display: grid;
-  grid-template-columns: minmax(260px, 1.25fr) minmax(260px, 0.9fr);
-  gap: 10px 16px;
-  padding: 14px;
+.consult-table {
+  overflow-x: auto;
   border: 1px solid rgba(126, 169, 219, 0.22);
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.04);
 }
 
-.consult-card h3 {
-  margin: 4px 0 5px;
-}
-
-.consult-card p {
-  margin: 0;
+.consult-row {
+  display: grid;
+  grid-template-columns: 92px minmax(210px, 1fr) minmax(180px, 0.9fr) minmax(320px, 1.35fr) 78px 62px 92px 100px 105px;
+  gap: 10px;
+  align-items: center;
+  min-width: 1260px;
+  padding: 9px 10px;
   color: var(--soft);
+  border-top: 1px solid rgba(126, 169, 219, 0.16);
+  background: rgba(255, 255, 255, 0.025);
 }
 
-.consult-meta {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: start;
-  justify-content: flex-end;
+.consult-row:hover {
+  background: rgba(77, 177, 201, 0.1);
 }
 
-.consult-meta span {
-  min-height: 30px;
-  padding: 6px 9px;
-  border: 1px solid rgba(126, 169, 219, 0.2);
-  border-radius: 6px;
+.consult-head {
   color: var(--muted);
-  background: rgba(4, 19, 38, 0.45);
-  font-size: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border-top: 0;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
-.consult-meta strong {
+.consult-row strong,
+.consult-row small {
+  display: block;
+}
+
+.consult-row strong {
   color: #fff;
 }
 
-.consult-lines {
-  grid-column: 1 / -1;
-  display: flex;
-  gap: 7px;
-  flex-wrap: wrap;
+.consult-row small {
+  color: var(--muted);
+  font-size: 12px;
 }
 
-.consult-lines span {
-  max-width: 360px;
+.consult-row > span {
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 5px 8px;
-  border-radius: 6px;
-  color: var(--soft);
-  background: rgba(77, 177, 201, 0.1);
 }
 
 .file-picker {
@@ -1152,13 +1173,65 @@ pre {
   }
 
   .sidebar {
-    position: static;
-    height: auto;
+    position: fixed;
+    z-index: 40;
+    top: 0;
+    left: 0;
+    width: min(310px, calc(100vw - 42px));
+    height: 100vh;
+    overflow-y: auto;
+    transform: translateX(-104%);
+    transition: transform 0.22s ease;
+    box-shadow: 26px 0 60px rgba(0, 0, 0, 0.42);
   }
 
   .sidebar-footer {
     position: static;
     margin-top: 14px;
+  }
+
+  .hamburger-button {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 42px;
+  }
+
+  .mobile-close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: inline-flex;
+    width: 34px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0;
+    border: 1px solid rgba(126, 169, 219, 0.34);
+    border-radius: 7px;
+    background: rgba(4, 19, 38, 0.8);
+    color: #fff;
+    font-size: 24px;
+    line-height: 1;
+  }
+
+  .menu-backdrop {
+    position: fixed;
+    z-index: 35;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.52);
+  }
+
+  body.menu-open {
+    overflow: hidden;
+  }
+
+  body.menu-open .sidebar {
+    transform: translateX(0);
+  }
+
+  body.menu-open .menu-backdrop {
+    display: block;
   }
 
   .hero-band,
@@ -1168,13 +1241,8 @@ pre {
   .data-grid,
   .input-overview,
   .consult-form,
-  .consult-card,
   .server-grid {
     grid-template-columns: 1fr;
-  }
-
-  .consult-meta {
-    justify-content: flex-start;
   }
 }
 

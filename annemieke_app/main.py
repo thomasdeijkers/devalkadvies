@@ -26,6 +26,20 @@ logo_path = Path(__file__).resolve().parent.parent / "logo.webp"
 APP_STARTED_AT = time.time()
 
 
+def euro(value: Decimal | int | float | str | None) -> str:
+    if value is None or value == "":
+        return ""
+    try:
+        amount = Decimal(str(value))
+    except InvalidOperation:
+        return str(value)
+    formatted = f"{amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"€ {formatted}"
+
+
+templates.env.filters["euro"] = euro
+
+
 @app.on_event("startup")
 def startup() -> None:
     create_db()
@@ -124,7 +138,7 @@ def _render_workspace(
         select(Relation).order_by(Relation.name)
     ).all()
     status_context = _status_context(session)
-    consult_documents = _consult_documents(session, query, status, date_from, date_to) if active_page == "consult" else []
+    consult_lines = _consult_lines(session, query, status, date_from, date_to) if active_page == "consult" else []
 
     return templates.TemplateResponse(
         request=request,
@@ -145,7 +159,7 @@ def _render_workspace(
             "selected_status": status or "",
             "selected_date_from": date_from or "",
             "selected_date_to": date_to or "",
-            "consult_documents": consult_documents,
+            "consult_lines": consult_lines,
             "active_page": active_page,
             **status_context,
         },
@@ -669,23 +683,23 @@ def _decimal_or_none(value: str) -> Decimal | None:
         return None
 
 
-def _consult_documents(
+def _consult_lines(
     session: Session,
     query: str | None,
     status: str | None,
     date_from: str | None,
     date_to: str | None,
-) -> list[IncomingDocument]:
+) -> list[BudgetLine]:
     client_relation = aliased(Relation)
     architect_relation = aliased(Relation)
     constructor_relation = aliased(Relation)
     statement = (
-        select(IncomingDocument)
+        select(BudgetLine)
+        .join(BudgetLine.document)
         .outerjoin(IncomingDocument.project)
         .outerjoin(client_relation, Project.client_relation_id == client_relation.id)
         .outerjoin(architect_relation, Project.architect_relation_id == architect_relation.id)
         .outerjoin(constructor_relation, Project.constructor_relation_id == constructor_relation.id)
-        .outerjoin(IncomingDocument.budget_lines)
     )
     cleaned_query = (query or "").strip()
     if cleaned_query:
@@ -703,6 +717,7 @@ def _consult_documents(
                 architect_relation.name.ilike(search),
                 constructor_relation.name.ilike(search),
                 BudgetLine.omschrijving_werkzaamheden.ilike(search),
+                BudgetLine.eenheid.ilike(search),
             )
         )
     if status:
@@ -714,7 +729,9 @@ def _consult_documents(
     if parsed_to:
         statement = statement.where(IncomingDocument.created_at < parsed_to + timedelta(days=1))
 
-    return session.scalars(statement.distinct().order_by(IncomingDocument.created_at.desc()).limit(80)).unique().all()
+    return session.scalars(
+        statement.order_by(IncomingDocument.created_at.desc(), BudgetLine.line_number).limit(300)
+    ).unique().all()
 
 
 def _date_or_none(value: str | None) -> datetime | None:
