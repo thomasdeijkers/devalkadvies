@@ -21,6 +21,7 @@
       <button name="status" value="needs_review" type="submit">Te controleren</button>
       <button name="status" value="archived" type="submit">Archiveren</button>
       <a class="button-link" href="/documents/{{ document.id }}/export.xlsx">Excel</a>
+      <a class="button-link" href="#pdf-viewer">PDF openen</a>
     </form>
     <form action="/documents/{{ document.id }}/reparse-openai" method="post" class="status-form">
       <button type="submit">Opnieuw parsen met OpenAI</button>
@@ -47,7 +48,6 @@
       </label>
       <input name="project_name" value="{{ document.project_name or '' }}" placeholder="Projectnaam alleen gebruiken als project nog niet is aangemaakt">
       <input name="document_type" value="{{ document.document_type or '' }}" placeholder="Documenttype">
-      <input name="source" value="{{ document.source or '' }}" placeholder="Bron / leverancier">
       <button type="submit">Opslaan</button>
     </form>
   </article>
@@ -72,6 +72,7 @@
         <div class="budget-actions">
           <span>{{ document.budget_lines|length }} regels gevonden</span>
           <div>
+            <button type="submit" name="action" value="delete_selected">Geselecteerde verwijderen</button>
             <button type="submit">Regels opslaan</button>
             <button type="submit" name="action" value="validate">Valideren</button>
           </div>
@@ -88,12 +89,13 @@
           <span>O.A.</span>
           <span>Eenheidsprijs</span>
           <span>Totaal</span>
+          <span>Weg</span>
         </div>
         {% for line in document.budget_lines %}
           <div class="budget-row editable" data-budget-row>
             <input type="hidden" name="line_id" value="{{ line.id }}">
             <input name="omschrijving_werkzaamheden" value="{{ line.omschrijving_werkzaamheden }}">
-            <input name="hoeveelheid" value="{{ line.hoeveelheid or '' }}">
+            <input name="hoeveelheid" value="{{ line.hoeveelheid|amount }}">
             <input name="eenheid" value="{{ line.eenheid or '' }}">
             <input name="norm_arbeid" value="{{ line.norm_arbeid or '' }}">
             <input name="uren" value="{{ line.uren or '' }}">
@@ -102,6 +104,9 @@
             <input name="onderaannemer" value="{{ line.onderaannemer or '' }}">
             <input name="eenheidsprijs" value="{{ line.eenheidsprijs or '' }}">
             <input name="totaal_prijs_per_regel" value="{{ line.totaal_prijs_per_regel or '' }}">
+            <label class="delete-check" title="Deze regel verwijderen bij opslaan">
+              <input type="checkbox" name="delete_line_id" value="{{ line.id }}">
+            </label>
           </div>
         {% endfor %}
       </div>
@@ -152,4 +157,15 @@
     <pre>{{ document.parsed_text or "Geen tekst beschikbaar." }}</pre>
   </article>
 </section>
+
+<div id="pdf-viewer" class="pdf-modal">
+  <a class="modal-backdrop" href="/documents/{{ document.id }}"></a>
+  <article class="pdf-panel">
+    <div class="pdf-header">
+      <strong>{{ document.original_filename }}</strong>
+      <a class="modal-close" href="/documents/{{ document.id }}">Sluiten</a>
+    </div>
+    <iframe src="/documents/{{ document.id }}/original.pdf" title="Originele PDF"></iframe>
+  </article>
+</div>
 {% endblock %}

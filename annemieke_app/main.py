@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session, aliased
 
 from .config import settings
 from .database import create_db, engine, get_session
-from .exporter import budget_document_to_xlsx
+from .exporter import budget_document_to_xlsx, selected_budget_lines_to_xlsx
 from .index_provider import sync_price_index_series
 from .models import (
     BudgetLine,
@@ -47,7 +47,31 @@ def euro(value: Decimal | int | float | str | None) -> str:
     return f"€ {formatted}"
 
 
+def amount(value: Decimal | int | float | str | None) -> str:
+    if value is None or value == "":
+        return ""
+    try:
+        number = Decimal(str(value))
+    except InvalidOperation:
+        return str(value)
+    if number == number.to_integral_value():
+        return str(number.quantize(Decimal("1")))
+    formatted = f"{number.quantize(Decimal('0.01')):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return formatted.rstrip("0").rstrip(",")
+
+
+def calculated_unit_price(line: BudgetLine) -> Decimal | None:
+    if line.totaal_prijs_per_regel is not None and line.hoeveelheid not in {None, 0}:
+        try:
+            return line.totaal_prijs_per_regel / line.hoeveelheid
+        except (InvalidOperation, ZeroDivisionError):
+            return line.eenheidsprijs
+    return line.eenheidsprijs
+
+
 templates.env.filters["euro"] = euro
+templates.env.filters["amount"] = amount
+templates.env.filters["unit_price"] = calculated_unit_price
 
 
 @app.on_event("startup")
@@ -193,6 +217,17 @@ def _render_workspace(
 @app.get("/logo.webp")
 def logo() -> FileResponse:
     return FileResponse(logo_path, media_type="image/webp")
+
+
+@app.get("/documents/{document_id}/original.pdf")
+def original_pdf(document_id: int, session: Session = Depends(get_session)) -> FileResponse:
+    document = session.get(IncomingDocument, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document niet gevonden.")
+    file_path = settings.upload_dir / document.stored_filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="PDF niet gevonden.")
+    return FileResponse(file_path, media_type="application/pdf", filename=document.original_filename)
 
 
 @app.post("/documents", response_class=HTMLResponse)
@@ -630,6 +665,7 @@ def update_budget_line(
     line.onderaannemer = _decimal_or_none(onderaannemer)
     line.eenheidsprijs = _decimal_or_none(eenheidsprijs)
     line.totaal_prijs_per_regel = _decimal_or_none(totaal_prijs_per_regel)
+    _normalize_line_prices(line)
     line.confidence = 100
     session.commit()
     return RedirectResponse(f"/documents/{document_id}", status_code=303)
@@ -647,6 +683,7 @@ async def update_budget_lines_bulk(
 
     form = await request.form()
     line_ids = form.getlist("line_id")
+    delete_line_ids = {str(value) for value in form.getlist("delete_line_id")}
     for index, raw_line_id in enumerate(line_ids):
         try:
             line_id = int(str(raw_line_id))
@@ -655,6 +692,9 @@ async def update_budget_lines_bulk(
 
         line = session.get(BudgetLine, line_id)
         if line is None or line.document_id != document_id:
+            continue
+        if str(line_id) in delete_line_ids:
+            session.delete(line)
             continue
 
         line.omschrijving_werkzaamheden = _form_value(form, "omschrijving_werkzaamheden", index).strip()
@@ -667,10 +707,14 @@ async def update_budget_lines_bulk(
         line.onderaannemer = _decimal_or_none(_form_value(form, "onderaannemer", index))
         line.eenheidsprijs = _decimal_or_none(_form_value(form, "eenheidsprijs", index))
         line.totaal_prijs_per_regel = _decimal_or_none(_form_value(form, "totaal_prijs_per_regel", index))
+        _normalize_line_prices(line)
         line.confidence = 100
 
     action = str(form.get("action") or "save")
-    document.status = "processed" if action == "validate" else "needs_review"
+    if action == "validate":
+        document.status = "processed"
+    elif action != "delete_selected":
+        document.status = "needs_review"
     session.commit()
     return RedirectResponse(f"/documents/{document_id}", status_code=303)
 
@@ -696,7 +740,7 @@ def add_budget_line(
 
     next_line_number = len(document.budget_lines) + 1
     session.add(
-        BudgetLine(
+        line := BudgetLine(
             document_id=document.id,
             line_number=next_line_number,
             omschrijving_werkzaamheden=omschrijving_werkzaamheden.strip(),
@@ -713,6 +757,7 @@ def add_budget_line(
             raw_text="handmatig toegevoegd",
         )
     )
+    _normalize_line_prices(line)
     session.commit()
     return RedirectResponse(f"/documents/{document.id}", status_code=303)
 
@@ -744,6 +789,23 @@ def export_document(document_id: int, session: Session = Depends(get_session)) -
         stream,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/consult/export.xlsx")
+def export_consult_selection(
+    q: str | None = None,
+    status: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    session: Session = Depends(get_session),
+) -> StreamingResponse:
+    lines = _consult_lines(session, q, status, date_from, date_to, limit=5000)
+    stream = selected_budget_lines_to_xlsx(lines)
+    return StreamingResponse(
+        stream,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="raadplegen-selectie.xlsx"'},
     )
 
 
@@ -791,6 +853,7 @@ def _consult_lines(
     status: str | None,
     date_from: str | None,
     date_to: str | None,
+    limit: int = 300,
 ) -> list[BudgetLine]:
     client_relation = aliased(Relation)
     architect_relation = aliased(Relation)
@@ -832,7 +895,7 @@ def _consult_lines(
         statement = statement.where(IncomingDocument.created_at < parsed_to + timedelta(days=1))
 
     return session.scalars(
-        statement.order_by(IncomingDocument.created_at.desc(), BudgetLine.line_number).limit(300)
+        statement.order_by(IncomingDocument.created_at.desc(), BudgetLine.line_number).limit(limit)
     ).unique().all()
 
 
@@ -864,6 +927,14 @@ def _form_value(form, key: str, index: int) -> str:
     if index >= len(values):
         return ""
     return str(values[index] or "")
+
+
+def _normalize_line_prices(line: BudgetLine) -> None:
+    if line.totaal_prijs_per_regel is not None and line.hoeveelheid not in {None, 0}:
+        try:
+            line.eenheidsprijs = line.totaal_prijs_per_regel / line.hoeveelheid
+        except (InvalidOperation, ZeroDivisionError):
+            pass
 
 
 def _int_or_none(value: str | int | None) -> int | None:

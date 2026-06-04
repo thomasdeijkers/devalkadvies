@@ -129,6 +129,7 @@
       <input name="date_from" type="date" value="{{ selected_date_from }}">
       <input name="date_to" type="date" value="{{ selected_date_to }}">
       <button type="submit">Zoeken</button>
+      <button type="submit" formaction="/consult/export.xlsx">Excel selectie</button>
     </form>
     <div class="consult-results consult-table">
       {% if consult_lines %}
@@ -153,14 +154,14 @@
               <small>{{ project.project_number if project and project.project_number else document.original_filename }}</small>
             </span>
             <span>
-              {{ project.client.name if project and project.client else document.source or "-" }}
+              {{ project.client.name if project and project.client else "-" }}
               {% if project and project.architect %}<small>Architect: {{ project.architect.name }}</small>{% endif %}
             </span>
             <span>{{ line.omschrijving_werkzaamheden }}</span>
-            <span>{{ line.hoeveelheid or "" }}</span>
+            <span>{{ line.hoeveelheid|amount }}</span>
             <span>{{ line.eenheid or "" }}</span>
             <span>
-              {{ line.eenheidsprijs|euro }}
+              {{ line|unit_price|euro }}
               {% if line.indexed_eenheidsprijs %}<small>Index: {{ line.indexed_eenheidsprijs|euro }}</small>{% endif %}
             </span>
             <span>

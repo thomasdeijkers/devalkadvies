@@ -5,7 +5,9 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.utils import get_column_letter
 
-from .models import IncomingDocument
+from decimal import Decimal, InvalidOperation
+
+from .models import BudgetLine, IncomingDocument
 
 
 HEADERS = [
@@ -96,3 +98,92 @@ def budget_document_to_xlsx(document: IncomingDocument) -> BytesIO:
     workbook.save(stream)
     stream.seek(0)
     return stream
+
+
+def selected_budget_lines_to_xlsx(lines: list[BudgetLine]) -> BytesIO:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Selectie"
+    headers = [
+        "Datum",
+        "Project",
+        "Projectnr",
+        "Relatie",
+        "Document",
+        "Omschrijving",
+        "Hvh",
+        "Ehd",
+        "Eenheidsprijs",
+        "Totaal",
+        "Status",
+    ]
+    sheet.append(headers)
+    for cell in sheet[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill(fill_type="solid", fgColor="1F4E78")
+        cell.alignment = Alignment(horizontal="center")
+
+    for line in lines:
+        document = line.document
+        project = document.project
+        sheet.append(
+            [
+                document.created_at.strftime("%d-%m-%Y") if document.created_at else "",
+                project.name if project else document.project_name or "",
+                project.project_number if project else "",
+                project.client.name if project and project.client else "",
+                document.original_filename,
+                line.omschrijving_werkzaamheden,
+                _display_amount(line.hoeveelheid),
+                line.eenheid or "",
+                _unit_price(line),
+                line.totaal_prijs_per_regel,
+                document.status,
+            ]
+        )
+
+    widths = [13, 26, 16, 24, 32, 48, 10, 8, 14, 14, 14]
+    for index, width in enumerate(widths, start=1):
+        sheet.column_dimensions[get_column_letter(index)].width = width
+
+    for row in sheet.iter_rows(min_row=2):
+        row[5].alignment = Alignment(wrap_text=True, vertical="top")
+        for cell in row:
+            cell.border = Border(bottom=Side(style="hair", color="D9D9D9"))
+        row[8].number_format = u'€ #,##0.00'
+        row[9].number_format = u'€ #,##0.00'
+
+    last_row = max(len(lines) + 1, 1)
+    table = Table(displayName="RaadplegenSelectie", ref=f"A1:K{last_row}")
+    table.tableStyleInfo = TableStyleInfo(
+        name="TableStyleMedium2",
+        showFirstColumn=False,
+        showLastColumn=False,
+        showRowStripes=True,
+        showColumnStripes=False,
+    )
+    sheet.add_table(table)
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = f"A1:K{last_row}"
+
+    stream = BytesIO()
+    workbook.save(stream)
+    stream.seek(0)
+    return stream
+
+
+def _unit_price(line: BudgetLine) -> Decimal | None:
+    if line.totaal_prijs_per_regel is not None and line.hoeveelheid not in {None, 0}:
+        try:
+            return line.totaal_prijs_per_regel / line.hoeveelheid
+        except (InvalidOperation, ZeroDivisionError):
+            return line.eenheidsprijs
+    return line.eenheidsprijs
+
+
+def _display_amount(value: Decimal | None) -> int | float | None:
+    if value is None:
+        return None
+    if value == value.to_integral_value():
+        return int(value)
+    return float(value.quantize(Decimal("0.01")))
