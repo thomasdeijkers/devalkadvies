@@ -21,7 +21,7 @@
         </a>
         <nav class="side-nav" aria-label="Hoofdmenu">
           <a class="{% if active_page == 'overview' %}active{% endif %}" href="/"><span>Overzicht</span><i></i></a>
-          <a class="{% if active_page == 'documents' %}active{% endif %}" href="/documents"><span>Inkomende stukken</span><i></i></a>
+          <a class="{% if active_page == 'documents' %}active{% endif %}" href="/documents"><span>Invoer</span><i></i></a>
           <a class="{% if active_page == 'relations' %}active{% endif %}" href="/relations"><span>Relaties</span><i></i></a>
           <a class="{% if active_page == 'projects' %}active{% endif %}" href="/projects"><span>Projecten</span><i></i></a>
           <a class="{% if active_page == 'server' %}active{% endif %}" href="/server"><span>Server</span><i class="warn"></i></a>
@@ -72,7 +72,7 @@
             <h1>{% block page_title %}Werkbak voor begrotingen{% endblock %}</h1>
           </div>
           <div class="top-actions">
-            <a href="/" class="ghost-button">Dashboard</a>
+            <a href="/" class="ghost-button">Overzicht</a>
             <a href="https://www.devalkadvies.nl/" class="ghost-button">Website</a>
           </div>
         </header>

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_title %}
-  {% if active_page == "documents" %}Inkomende stukken
+  {% if active_page == "documents" %}Invoer
   {% elif active_page == "relations" %}Relaties
   {% elif active_page == "projects" %}Projecten
   {% elif active_page == "server" %}Server overzicht
@@ -14,9 +14,9 @@
   {% if active_page in ["overview", "documents"] %}
   <section class="hero-band">
     <div>
-      <span class="eyebrow accent">Automatisch</span>
-      <h2>PDF begroting naar controleerbare Excel-regels</h2>
-      <p>Upload begrotingen, herken regels uit PDF-tekst en controleer de kolommen voordat je exporteert.</p>
+      <span class="eyebrow accent">{% if active_page == "documents" %}Invoer{% else %}Automatisch{% endif %}</span>
+      <h2>{% if active_page == "documents" %}Nieuwe begroting invoeren{% else %}PDF begroting naar controleerbare Excel-regels{% endif %}</h2>
+      <p>{% if active_page == "documents" %}Koppel een project, upload een PDF en laat OCR/OpenAI de eerste begrotingsregels voorbereiden.{% else %}Upload begrotingen, herken regels uit PDF-tekst en controleer de kolommen voordat je exporteert.{% endif %}</p>
     </div>
     <form action="/documents" method="post" enctype="multipart/form-data" class="upload-form">
       <input name="project_name" placeholder="Projectnaam">
@@ -32,6 +32,23 @@
       </label>
       <button type="submit">Parser starten</button>
     </form>
+  </section>
+  {% endif %}
+
+  {% if active_page == "documents" %}
+  <section class="input-overview">
+    <article>
+      <span>Workflow</span>
+      <strong>Upload → OCR → OpenAI → Controle → Excel</strong>
+    </article>
+    <article>
+      <span>Projectkoppeling</span>
+      <strong>{{ project_options|length }} projecten beschikbaar</strong>
+    </article>
+    <article>
+      <span>Openstaande controle</span>
+      <strong>{{ needs_review }} stukken</strong>
+    </article>
   </section>
   {% endif %}
 
@@ -238,7 +255,7 @@
   {% if active_page in ["overview", "documents"] %}
   <section id="documents" class="document-list">
     <div class="section-heading">
-      <h2>Recente stukken</h2>
+      <h2>{% if active_page == "documents" %}Invoerhistorie{% else %}Recente stukken{% endif %}</h2>
       <form action="/documents" method="get" class="filter-form">
         <input name="project" value="{{ selected_project }}" placeholder="Zoek project">
         <select name="status">
