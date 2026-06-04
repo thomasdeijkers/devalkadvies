@@ -56,6 +56,11 @@ jobs:
               -p 9000:9000 \
               -e APP_NAME="DeValk advies Begrotingsparser" \
               -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+              -e OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
+              -e OPENAI_MODEL="${{ secrets.OPENAI_MODEL }}" \
+              -e OPENAI_BUDGET_FALLBACK_ENABLED="${{ secrets.OPENAI_BUDGET_FALLBACK_ENABLED }}" \
+              -e OCR_ENABLED="${{ secrets.OCR_ENABLED }}" \
+              -e OCR_LANG="${{ secrets.OCR_LANG }}" \
               -e UPLOAD_DIR="/app/uploads" \
               -v devalkadvies_uploads:/app/uploads \
               devalkadvies

@@ -27,6 +27,12 @@ De huidige parser herkent alvast omschrijving, hoeveelheid, eenheid, eenheidspri
 
 OCR is nodig voor gescande PDF's of screenshots in PDF's. OCR zet beeld om naar tekst, maar begrijpt de begrotingsstructuur nog niet vanzelf.
 
+De app gebruikt hiervoor Tesseract in de Docker-container. Standaard staat `OCR_LANG` op:
+
+```text
+nld+eng
+```
+
 ## Laag 4: OpenAI-structurering
 
 OpenAI is vooral nuttig na OCR of bij rommelige PDF-tekst. De rol van OpenAI wordt dan:
@@ -39,3 +45,21 @@ OpenAI is vooral nuttig na OCR of bij rommelige PDF-tekst. De rol van OpenAI wor
 
 Kort: OCR leest, OpenAI structureert.
 
+De app gebruikt dezelfde hoofdaanpak als Top Groep Nederland: een directe call naar de OpenAI Responses API met JSON schema output. Zet hiervoor in GitHub Actions Secrets:
+
+```text
+OPENAI_API_KEY
+OPENAI_MODEL
+OPENAI_BUDGET_FALLBACK_ENABLED
+OCR_ENABLED
+OCR_LANG
+```
+
+Aanbevolen waarden:
+
+```text
+OPENAI_MODEL=gpt-4.1-mini
+OPENAI_BUDGET_FALLBACK_ENABLED=true
+OCR_ENABLED=true
+OCR_LANG=nld+eng
+```
