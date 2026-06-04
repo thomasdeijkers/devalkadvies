@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="detail-grid">
+  <article class="panel">
+    <a class="back-link" href="/">Terug naar overzicht</a>
+    <span class="eyebrow">Begroting controleren</span>
+    <h1>{{ document.original_filename }}</h1>
+    <div class="meta-line">
+      <mark class="status {{ document.status }}">{{ document.status }}</mark>
+      <span>{{ document.created_at.strftime("%d-%m-%Y %H:%M") if document.created_at else "" }}</span>
+    </div>
+    {% if document.parser_notes %}
+      <p class="note">{{ document.parser_notes }}</p>
+    {% endif %}
+
+    <form action="/documents/{{ document.id }}/status" method="post" class="status-form">
+      <button name="status" value="needs_review" type="submit">Te controleren</button>
+      <button name="status" value="processed" type="submit">Verwerkt</button>
+      <button name="status" value="archived" type="submit">Archiveren</button>
+      <a class="button-link" href="/documents/{{ document.id }}/export.xlsx">Excel</a>
+    </form>
+  </article>
+
+  <article class="panel">
+    <h2>Begrotingsregels</h2>
+    {% if document.budget_lines %}
+      <div class="budget-table">
+        <div class="budget-row budget-head">
+          <span>Omschrijving</span>
+          <span>Hvh</span>
+          <span>Ehd</span>
+          <span>Eenheidsprijs</span>
+          <span>Totaal</span>
+        </div>
+        {% for line in document.budget_lines %}
+          <div class="budget-row">
+            <span>{{ line.omschrijving_werkzaamheden }}</span>
+            <span>{{ line.hoeveelheid or "" }}</span>
+            <span>{{ line.eenheid or "" }}</span>
+            <span>{{ line.eenheidsprijs or "" }}</span>
+            <span>{{ line.totaal_prijs_per_regel or "" }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">Er zijn nog geen begrotingsregels gevonden.</p>
+    {% endif %}
+  </article>
+
+  <article class="panel">
+    <h2>Extra databasevelden</h2>
+    {% if document.fields %}
+      <div class="field-list">
+        {% for field in document.fields %}
+          <div class="field-row">
+            <span>{{ field.field_name }}</span>
+            <strong>{{ field.field_value }}</strong>
+            <small>{{ field.confidence }}% - {{ field.source }}</small>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+    <form action="/documents/{{ document.id }}/fields" method="post" class="field-form">
+      <input name="field_name" placeholder="veldnaam" required>
+      <input name="field_value" placeholder="waarde">
+      <button type="submit">Toevoegen</button>
+    </form>
+  </article>
+
+  <article class="panel text-panel">
+    <h2>Gevonden tekst</h2>
+    <pre>{{ document.parsed_text or "Geen tekst beschikbaar." }}</pre>
+  </article>
+</section>
+{% endblock %}

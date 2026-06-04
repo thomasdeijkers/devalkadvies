@@ -1,0 +1,23 @@
+[project]
+name = "annemieke-dossierhub"
+version = "0.1.0"
+description = "Webapp voor het parsen en controleren van inkomende PDF-stukken."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "jinja2>=3.1.4",
+    "python-multipart>=0.0.12",
+    "pypdf>=5.0.0",
+    "openpyxl>=3.1.5",
+    "psycopg[binary]>=3.2.3",
+    "sqlalchemy>=2.0.35",
+    "uvicorn[standard]>=0.30.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.3",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

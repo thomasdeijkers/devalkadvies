@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="workspace">
+  <div class="panel upload-panel">
+    <div>
+      <span class="eyebrow">Begrotingsparser</span>
+      <h1>Werkbak voor begrotingen</h1>
+      <p>Upload begrotings-PDF's, laat de parser regels herkennen en exporteer de gecontroleerde gegevens naar Excel voor verdere beoordeling.</p>
+    </div>
+    <form action="/documents" method="post" enctype="multipart/form-data" class="upload-form">
+      <input id="file" name="file" type="file" accept="application/pdf" required>
+      <button type="submit">Uploaden</button>
+    </form>
+  </div>
+
+  <div class="metrics">
+    <article>
+      <span>Totaal</span>
+      <strong>{{ total }}</strong>
+    </article>
+    <article>
+      <span>Te controleren</span>
+      <strong>{{ needs_review }}</strong>
+    </article>
+    <article>
+      <span>Verwerkt</span>
+      <strong>{{ processed }}</strong>
+    </article>
+  </div>
+
+  <section class="document-list">
+    <div class="section-heading">
+      <h2>Recente stukken</h2>
+    </div>
+    {% if documents %}
+      <div class="table">
+        <div class="table-row table-head">
+          <span>Bestand</span>
+          <span>Status</span>
+          <span>Regels</span>
+          <span>Datum</span>
+        </div>
+        {% for document in documents %}
+          <a class="table-row" href="/documents/{{ document.id }}">
+            <span>{{ document.original_filename }}</span>
+            <span><mark class="status {{ document.status }}">{{ document.status }}</mark></span>
+            <span>{{ document.budget_lines|length }}</span>
+            <span>{{ document.created_at.strftime("%d-%m-%Y") if document.created_at else "" }}</span>
+          </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">Nog geen stukken geupload.</div>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

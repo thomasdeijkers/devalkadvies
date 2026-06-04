@@ -1,0 +1,60 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t devalkadvies .
+
+      - name: Save image
+        run: docker save devalkadvies | gzip > devalkadvies.tar.gz
+
+      - name: Prepare server folder
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.PUBLISH_HOST }}
+          username: ${{ secrets.PUBLISH_USER }}
+          key: ${{ secrets.PUBLISH_SSH_KEY }}
+          script: |
+            mkdir -p "${{ secrets.PUBLISH_PATH }}"
+
+      - name: Copy image to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.PUBLISH_HOST }}
+          username: ${{ secrets.PUBLISH_USER }}
+          key: ${{ secrets.PUBLISH_SSH_KEY }}
+          source: "devalkadvies.tar.gz"
+          target: "${{ secrets.PUBLISH_PATH }}"
+
+      - name: Restart app on server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.PUBLISH_HOST }}
+          username: ${{ secrets.PUBLISH_USER }}
+          key: ${{ secrets.PUBLISH_SSH_KEY }}
+          script: |
+            cd "${{ secrets.PUBLISH_PATH }}"
+            docker load < devalkadvies.tar.gz
+            docker stop devalkadvies || true
+            docker rm devalkadvies || true
+            docker run -d \
+              --name devalkadvies \
+              --restart unless-stopped \
+              -p 8000:8000 \
+              -e APP_NAME="DeValk advies Begrotingsparser" \
+              -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+              -e UPLOAD_DIR="/app/uploads" \
+              -v devalkadvies_uploads:/app/uploads \
+              devalkadvies

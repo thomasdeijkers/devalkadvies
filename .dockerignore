@@ -1,0 +1,9 @@
+.git
+.venv
+__pycache__
+*.pyc
+database/*.db
+database/*.sqlite
+uploads/*
+*.zip
+
