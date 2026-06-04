@@ -72,7 +72,9 @@ def parse_pdf(path: Path, force_openai: bool = False) -> ParsedPdf:
 
     if _openai_enabled() and (force_openai or confidence < _openai_threshold()):
         openai_result = _parse_budget_with_openai(path, text)
-        if openai_result and openai_result.budget_lines:
+        if openai_result and openai_result.budget_lines and (
+            force_openai or len(openai_result.budget_lines) >= max(1, int(len(budget_lines) * 0.8))
+        ):
             return openai_result
 
     if not text:
@@ -120,7 +122,7 @@ def _normalize_key(raw_key: str) -> str:
 def extract_budget_lines(text: str) -> list[ParsedBudgetLine]:
     lines: list[ParsedBudgetLine] = []
 
-    for raw_line in text.splitlines():
+    for raw_line in _candidate_budget_rows(text):
         normalized = " ".join(raw_line.split())
         if not _looks_like_budget_line(normalized):
             continue
@@ -162,6 +164,46 @@ def extract_budget_lines(text: str) -> list[ParsedBudgetLine]:
         )
 
     return lines
+
+
+def _candidate_budget_rows(text: str) -> list[str]:
+    rows: list[str] = []
+    pending = ""
+
+    for raw in text.splitlines():
+        line = " ".join(raw.split())
+        if not line:
+            pending = ""
+            continue
+        if _is_table_noise(line):
+            continue
+
+        candidate = f"{pending} {line}".strip() if pending else line
+        if _looks_like_budget_line(candidate):
+            rows.append(candidate)
+            pending = ""
+            continue
+
+        money_count = len(MONEY_PATTERN.findall(line))
+        has_letters = bool(re.search(r"[A-Za-zÀ-ÿ]", line))
+        if has_letters and money_count < 2 and len(line) < 140:
+            pending = candidate
+        else:
+            pending = ""
+
+    if pending and _looks_like_budget_line(pending):
+        rows.append(pending)
+
+    return rows
+
+
+def _is_table_noise(line: str) -> bool:
+    lowered = line.lower().strip(" :;|-")
+    if not lowered:
+        return True
+    header_words = {"omschrijving", "hvh", "ehd", "norm", "uren", "materiaal", "materieel", "o.a.", "ehdprijs", "totaal"}
+    tokens = {token.strip(" :;|-") for token in lowered.split()}
+    return len(tokens & header_words) >= 2
 
 
 def _looks_like_budget_line(line: str) -> bool:
@@ -248,7 +290,9 @@ def _parse_budget_with_openai(path: Path, text: str) -> ParsedPdf | None:
             "type": "input_text",
             "text": (
                 "Parseer deze Nederlandse bouwbegroting naar begrotingsregels. "
-                "Geef alleen regels terug die op begrotingsregels lijken. "
+                "Haal zo veel mogelijk echte begrotingsregels uit alle pagina's. "
+                "Sla regels niet over omdat een kolom leeg is; zet onbekende kolommen op null. "
+                "Negeer kopregels, tussenkoppen, paginanummers en totalen zonder omschrijving. "
                 "Kolommen: omschrijving_werkzaamheden, hoeveelheid, eenheid, norm_arbeid, uren, "
                 "materiaal, materieel, onderaannemer, eenheidsprijs, totaal_prijs_per_regel. "
                 "Gebruik decimalen als getal zonder duizendtallen. Laat onbekende waarden null. "
@@ -256,8 +300,7 @@ def _parse_budget_with_openai(path: Path, text: str) -> ParsedPdf | None:
             ),
         }
     ]
-    image_url = _first_page_image_data_url(path)
-    if image_url:
+    for image_url in _page_image_data_urls(path):
         content.append({"type": "input_image", "image_url": image_url, "detail": "high"})
 
     payload = {
@@ -377,18 +420,26 @@ def _normalize_openai_budget_lines(data: dict) -> list[ParsedBudgetLine]:
     return lines
 
 
-def _first_page_image_data_url(path: Path) -> str | None:
+def _page_image_data_urls(path: Path) -> list[str]:
     try:
         import fitz
 
         document = fitz.open(path)
         if not document:
-            return None
-        pixmap = document[0].get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
-        encoded = base64.b64encode(pixmap.tobytes("png")).decode("ascii")
-        return f"data:image/png;base64,{encoded}"
+            return []
+        try:
+            page_limit = int(os.getenv("OPENAI_IMAGE_PAGES", "6"))
+        except ValueError:
+            page_limit = 6
+        images = []
+        for page_index in range(min(len(document), max(1, page_limit))):
+            page = document[page_index]
+            pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+            encoded = base64.b64encode(pixmap.tobytes("png")).decode("ascii")
+            images.append(f"data:image/png;base64,{encoded}")
+        return images
     except Exception:
-        return None
+        return []
 
 
 def _normalize_usage(usage: dict) -> dict:
