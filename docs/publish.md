@@ -91,6 +91,69 @@ De container draait op poort:
 9000
 ```
 
+## Docker op de server
+
+De server moet Docker hebben, omdat GitHub Actions een Docker image publiceert en als container start.
+
+Installeer Docker op de server:
+
+```bash
+sudo apt update
+sudo apt install -y docker.io
+sudo systemctl enable --now docker
+```
+
+Geef gebruiker `opticore` toegang tot Docker:
+
+```bash
+sudo usermod -aG docker opticore
+```
+
+Log daarna uit en opnieuw in op de server, of open een nieuwe SSH-sessie. Controleer daarna:
+
+```bash
+docker --version
+docker ps
+```
+
+## Domein
+
+Het publieke adres wordt:
+
+```text
+https://dva.opticore-insights.nl
+```
+
+De app-container blijft lokaal op de server draaien op poort `9000`. Zet daarom een reverse proxy voor het domein naar:
+
+```text
+http://127.0.0.1:9000
+```
+
+Voor Nginx kan dat bijvoorbeeld zo:
+
+```nginx
+server {
+    listen 80;
+    server_name dva.opticore-insights.nl;
+
+    location / {
+        proxy_pass http://127.0.0.1:9000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Daarna SSL aanzetten, bijvoorbeeld met:
+
+```bash
+sudo certbot --nginx -d dva.opticore-insights.nl
+```
+
 ## Publish-logica
 
 Bij iedere push naar `main`:
