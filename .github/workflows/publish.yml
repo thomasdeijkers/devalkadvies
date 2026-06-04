@@ -52,7 +52,7 @@ jobs:
             docker run -d \
               --name devalkadvies \
               --restart unless-stopped \
-              -p 8000:8000 \
+              -p 9000:9000 \
               -e APP_NAME="DeValk advies Begrotingsparser" \
               -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
               -e UPLOAD_DIR="/app/uploads" \

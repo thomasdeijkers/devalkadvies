@@ -19,5 +19,8 @@ dev = [
     "pytest>=8.3.3",
 ]
 
+[tool.setuptools]
+packages = ["annemieke_app"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -22,13 +22,13 @@ pip install -e .
 ## Starten
 
 ```powershell
-uvicorn annemieke_app.main:app --reload
+uvicorn annemieke_app.main:app --reload --port 9000
 ```
 
 Open daarna:
 
 ```text
-http://127.0.0.1:8000
+http://127.0.0.1:9000
 ```
 
 ## Database
