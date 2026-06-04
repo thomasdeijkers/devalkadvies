@@ -56,7 +56,7 @@
       </div>
     </div>
     {% if document.budget_lines %}
-      <form action="/documents/{{ document.id }}/lines/bulk" method="post" class="budget-edit-form">
+      <form action="/documents/{{ document.id }}/budget-lines/bulk" method="post" class="budget-edit-form">
         <div class="budget-actions">
           <span>{{ document.budget_lines|length }} regels gevonden</span>
           <div>

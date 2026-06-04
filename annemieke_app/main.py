@@ -491,7 +491,7 @@ def update_budget_line(
     return RedirectResponse(f"/documents/{document_id}", status_code=303)
 
 
-@app.post("/documents/{document_id}/lines/bulk")
+@app.post("/documents/{document_id}/budget-lines/bulk")
 async def update_budget_lines_bulk(
     document_id: int,
     request: Request,
