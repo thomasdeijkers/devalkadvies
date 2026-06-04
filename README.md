@@ -31,6 +31,12 @@ Open daarna:
 http://127.0.0.1:9000
 ```
 
+Publiek komt de app achter:
+
+```text
+https://dva.opticore-insights.nl
+```
+
 ## Database
 
 Standaard gebruikt de app lokaal SQLite:

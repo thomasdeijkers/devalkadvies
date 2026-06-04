@@ -45,6 +45,18 @@ Gebruik voor `PUBLISH_PATH`:
 postgresql+psycopg://gebruiker:wachtwoord@136.144.183.127:5432/devalkadvies
 ```
 
+Als PostgreSQL op dezelfde VPS draait als de Docker-container, gebruik dan:
+
+```text
+postgresql+psycopg://opticore:opticore%402025!@host.docker.internal:5432/devalkadvies
+```
+
+De workflow voegt `host.docker.internal` toe aan de container met:
+
+```text
+--add-host=host.docker.internal:host-gateway
+```
+
 ## SSH key controleren
 
 `PUBLISH_SSH_KEY` moet de private key zijn. De bijbehorende public key moet op de server staan bij de gebruiker uit `PUBLISH_USER`.

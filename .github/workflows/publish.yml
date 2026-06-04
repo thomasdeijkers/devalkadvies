@@ -52,6 +52,7 @@ jobs:
             docker run -d \
               --name devalkadvies \
               --restart unless-stopped \
+              --add-host=host.docker.internal:host-gateway \
               -p 9000:9000 \
               -e APP_NAME="DeValk advies Begrotingsparser" \
               -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
