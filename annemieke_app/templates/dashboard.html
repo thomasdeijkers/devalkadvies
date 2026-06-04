@@ -18,7 +18,7 @@
       <h2>{% if active_page == "documents" %}Nieuwe begroting invoeren{% else %}PDF begroting naar controleerbare Excel-regels{% endif %}</h2>
       <p>{% if active_page == "documents" %}Koppel een project, upload een PDF en laat OCR/OpenAI de eerste begrotingsregels voorbereiden.{% else %}Upload begrotingen, herken regels uit PDF-tekst en controleer de kolommen voordat je exporteert.{% endif %}</p>
     </div>
-    <form action="/documents" method="post" enctype="multipart/form-data" class="upload-form">
+    <form action="/documents" method="post" enctype="multipart/form-data" class="upload-form" data-parser-form>
       <input name="project_name" placeholder="Projectnaam">
       <select name="project_id">
         <option value="">Koppel project</option>
@@ -32,6 +32,16 @@
       </label>
       <button type="submit">Parser starten</button>
     </form>
+    <div class="parser-progress" data-parser-progress hidden>
+      <div class="progress-copy">
+        <strong>Parser loopt</strong>
+        <span data-progress-label>PDF uploaden</span>
+      </div>
+      <div class="progress-track" aria-hidden="true">
+        <i data-progress-bar></i>
+      </div>
+      <small>Dit kan even duren bij grote begrotingen of scans.</small>
+    </div>
   </section>
   {% endif %}
 

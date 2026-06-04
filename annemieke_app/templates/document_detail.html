@@ -19,7 +19,6 @@
 
     <form action="/documents/{{ document.id }}/status" method="post" class="status-form">
       <button name="status" value="needs_review" type="submit">Te controleren</button>
-      <button name="status" value="processed" type="submit">Verwerkt</button>
       <button name="status" value="archived" type="submit">Archiveren</button>
       <a class="button-link" href="/documents/{{ document.id }}/export.xlsx">Excel</a>
     </form>
@@ -42,8 +41,29 @@
   </article>
 
   <article class="panel">
-    <h2>Begrotingsregels</h2>
+    <div class="budget-toolbar">
+      <div>
+        <span class="eyebrow">Begrotingsregels</span>
+        <h2>Controle en uniformering</h2>
+      </div>
+      <div class="budget-tools">
+        <input data-budget-filter placeholder="Zoek in alle velden">
+        <select aria-label="Rekenen naar">
+          <option>Rekenen naar: totaal per regel</option>
+          <option>Rekenen naar: eenheidsprijs</option>
+          <option>Rekenen naar: hoeveelheid x eenheidsprijs</option>
+        </select>
+      </div>
+    </div>
     {% if document.budget_lines %}
+      <form action="/documents/{{ document.id }}/lines/bulk" method="post" class="budget-edit-form">
+        <div class="budget-actions">
+          <span>{{ document.budget_lines|length }} regels gevonden</span>
+          <div>
+            <button type="submit">Regels opslaan</button>
+            <button type="submit" name="action" value="validate">Valideren</button>
+          </div>
+        </div>
       <div class="budget-table">
         <div class="budget-row budget-head">
           <span>Omschrijving</span>
@@ -58,7 +78,8 @@
           <span>Totaal</span>
         </div>
         {% for line in document.budget_lines %}
-          <form class="budget-row editable" action="/documents/{{ document.id }}/lines/{{ line.id }}" method="post">
+          <div class="budget-row editable" data-budget-row>
+            <input type="hidden" name="line_id" value="{{ line.id }}">
             <input name="omschrijving_werkzaamheden" value="{{ line.omschrijving_werkzaamheden }}">
             <input name="hoeveelheid" value="{{ line.hoeveelheid or '' }}">
             <input name="eenheid" value="{{ line.eenheid or '' }}">
@@ -68,13 +89,11 @@
             <input name="materieel" value="{{ line.materieel or '' }}">
             <input name="onderaannemer" value="{{ line.onderaannemer or '' }}">
             <input name="eenheidsprijs" value="{{ line.eenheidsprijs or '' }}">
-            <span class="line-actions">
-              <input name="totaal_prijs_per_regel" value="{{ line.totaal_prijs_per_regel or '' }}">
-              <button type="submit">OK</button>
-            </span>
-          </form>
+            <input name="totaal_prijs_per_regel" value="{{ line.totaal_prijs_per_regel or '' }}">
+          </div>
         {% endfor %}
       </div>
+      </form>
     {% else %}
       <p class="muted">Er zijn nog geen begrotingsregels gevonden.</p>
     {% endif %}

@@ -61,8 +61,6 @@
               </div>
             </article>
           </div>
-          <span>Werkgebieden</span>
-          <strong>Budgetteren · Begroten · Bewaken · Beoordelen</strong>
         </div>
       </aside>
       <main class="main-panel">
@@ -81,5 +79,58 @@
         </section>
       </main>
     </div>
+    <script>
+      document.querySelectorAll("[data-parser-form]").forEach((form) => {
+        const progress = form.parentElement.querySelector("[data-parser-progress]");
+        const bar = progress ? progress.querySelector("[data-progress-bar]") : null;
+        const label = progress ? progress.querySelector("[data-progress-label]") : null;
+        const steps = [
+          "PDF uploaden",
+          "OCR tekst uitlezen",
+          "Regels herkennen",
+          "OpenAI controle",
+          "Opslaan in database"
+        ];
+
+        form.addEventListener("submit", () => {
+          if (!progress || !bar || !label) return;
+          progress.hidden = false;
+          form.classList.add("is-working");
+          let step = 0;
+          let value = 8;
+          label.textContent = steps[step];
+          bar.style.width = `${value}%`;
+
+          window.setInterval(() => {
+            value = Math.min(value + Math.max(2, Math.round((96 - value) / 7)), 96);
+            step = Math.min(Math.floor(value / 22), steps.length - 1);
+            label.textContent = steps[step];
+            bar.style.width = `${value}%`;
+          }, 900);
+        });
+      });
+
+      document.querySelectorAll(".file-picker input[type='file']").forEach((input) => {
+        input.addEventListener("change", () => {
+          const label = input.closest(".file-picker")?.querySelector("span");
+          if (label && input.files.length) label.textContent = input.files[0].name;
+        });
+      });
+
+      document.querySelectorAll("[data-budget-filter]").forEach((input) => {
+        const table = input.closest(".panel")?.querySelector(".budget-table");
+        if (!table) return;
+        input.addEventListener("input", () => {
+          const query = input.value.trim().toLowerCase();
+          table.querySelectorAll("[data-budget-row]").forEach((row) => {
+            const haystack = Array.from(row.querySelectorAll("input"))
+              .map((field) => field.value)
+              .join(" ")
+              .toLowerCase();
+            row.hidden = query && !haystack.includes(query);
+          });
+        });
+      });
+    </script>
   </body>
 </html>

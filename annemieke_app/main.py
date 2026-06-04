@@ -491,6 +491,46 @@ def update_budget_line(
     return RedirectResponse(f"/documents/{document_id}", status_code=303)
 
 
+@app.post("/documents/{document_id}/lines/bulk")
+async def update_budget_lines_bulk(
+    document_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    document = session.get(IncomingDocument, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document niet gevonden.")
+
+    form = await request.form()
+    line_ids = form.getlist("line_id")
+    for index, raw_line_id in enumerate(line_ids):
+        try:
+            line_id = int(str(raw_line_id))
+        except ValueError:
+            continue
+
+        line = session.get(BudgetLine, line_id)
+        if line is None or line.document_id != document_id:
+            continue
+
+        line.omschrijving_werkzaamheden = _form_value(form, "omschrijving_werkzaamheden", index).strip()
+        line.hoeveelheid = _decimal_or_none(_form_value(form, "hoeveelheid", index))
+        line.eenheid = _form_value(form, "eenheid", index).strip() or None
+        line.norm_arbeid = _decimal_or_none(_form_value(form, "norm_arbeid", index))
+        line.uren = _decimal_or_none(_form_value(form, "uren", index))
+        line.materiaal = _decimal_or_none(_form_value(form, "materiaal", index))
+        line.materieel = _decimal_or_none(_form_value(form, "materieel", index))
+        line.onderaannemer = _decimal_or_none(_form_value(form, "onderaannemer", index))
+        line.eenheidsprijs = _decimal_or_none(_form_value(form, "eenheidsprijs", index))
+        line.totaal_prijs_per_regel = _decimal_or_none(_form_value(form, "totaal_prijs_per_regel", index))
+        line.confidence = 100
+
+    action = str(form.get("action") or "save")
+    document.status = "processed" if action == "validate" else "needs_review"
+    session.commit()
+    return RedirectResponse(f"/documents/{document_id}", status_code=303)
+
+
 @app.post("/documents/{document_id}/lines")
 def add_budget_line(
     document_id: int,
@@ -599,6 +639,13 @@ def _decimal_or_none(value: str) -> Decimal | None:
         return Decimal(cleaned)
     except InvalidOperation:
         return None
+
+
+def _form_value(form, key: str, index: int) -> str:
+    values = form.getlist(key)
+    if index >= len(values):
+        return ""
+    return str(values[index] or "")
 
 
 def _int_or_none(value: str | int | None) -> int | None:
