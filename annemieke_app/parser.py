@@ -7,10 +7,6 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-import fitz
-import pytesseract
-import requests
-from PIL import Image
 from pypdf import PdfReader
 
 
@@ -203,6 +199,10 @@ def _text_needs_ocr(text: str) -> bool:
 
 def _extract_ocr_text(path: Path) -> str:
     try:
+        import fitz
+        import pytesseract
+        from PIL import Image
+
         document = fitz.open(path)
         pages = []
         for page in document:
@@ -240,6 +240,8 @@ def _line_confidence(lines: list[ParsedBudgetLine]) -> int:
 
 
 def _parse_budget_with_openai(path: Path, text: str) -> ParsedPdf | None:
+    import requests
+
     model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini").strip() or "gpt-4.1-mini"
     content = [
         {
@@ -377,6 +379,8 @@ def _normalize_openai_budget_lines(data: dict) -> list[ParsedBudgetLine]:
 
 def _first_page_image_data_url(path: Path) -> str | None:
     try:
+        import fitz
+
         document = fitz.open(path)
         if not document:
             return None
