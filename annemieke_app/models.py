@@ -124,3 +124,18 @@ class BudgetLine(Base):
     raw_text: Mapped[str] = mapped_column(Text, default="")
 
     document: Mapped[IncomingDocument] = relationship(back_populates="budget_lines")
+
+
+class OpenAIUsageEvent(Base):
+    __tablename__ = "openai_usage_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source: Mapped[str] = mapped_column(String(80), default="budget_parse", index=True)
+    source_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    model: Mapped[str] = mapped_column(String(120), default="")
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cached_input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    estimated_cost_usd: Mapped[Decimal] = mapped_column(Numeric(12, 4), default=Decimal("0"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)

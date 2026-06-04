@@ -1,3 +1,6 @@
+import os
+import time
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from uuid import uuid4
@@ -6,13 +9,13 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Upload
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .database import create_db, get_session
+from .database import create_db, engine, get_session
 from .exporter import budget_document_to_xlsx
-from .models import BudgetLine, ExtractedField, IncomingDocument, Project, Relation
+from .models import BudgetLine, ExtractedField, IncomingDocument, OpenAIUsageEvent, Project, Relation
 from .parser import parse_pdf
 
 
@@ -20,6 +23,7 @@ app = FastAPI(title=settings.app_name)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
 logo_path = Path(__file__).resolve().parent.parent / "logo.webp"
+APP_STARTED_AT = time.time()
 
 
 @app.on_event("startup")
@@ -61,6 +65,7 @@ def dashboard(
     relation_options = session.scalars(
         select(Relation).order_by(Relation.name)
     ).all()
+    status_context = _status_context(session)
 
     return templates.TemplateResponse(
         request=request,
@@ -78,6 +83,7 @@ def dashboard(
             "relation_options": relation_options,
             "selected_project": project or "",
             "selected_status": status or "",
+            **status_context,
         },
     )
 
@@ -139,6 +145,7 @@ async def upload_document(
 
     session.add(document)
     session.commit()
+    _record_openai_usage(session, "budget_upload", document.id, parsed.openai_usage)
 
     return RedirectResponse(f"/documents/{document.id}", status_code=303)
 
@@ -305,6 +312,7 @@ def reparse_document_with_openai(
         for line in parsed.budget_lines
     ]
     session.commit()
+    _record_openai_usage(session, "budget_reparse", document.id, parsed.openai_usage)
     return RedirectResponse(f"/documents/{document.id}", status_code=303)
 
 
@@ -326,6 +334,7 @@ def document_detail(
             "app_name": settings.app_name,
             "document": document,
             "project_options": session.scalars(select(Project).order_by(Project.name)).all(),
+            **_status_context(session),
         },
     )
 
@@ -576,3 +585,147 @@ def _parser_note(parsed) -> str | None:
     if parsed.notes:
         parts.append(parsed.notes)
     return " | ".join(parts)
+
+
+def _record_openai_usage(session: Session, source: str, source_id: int, usage: dict | None) -> None:
+    if not usage:
+        return
+    model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini").strip() or "gpt-4.1-mini"
+    event = OpenAIUsageEvent(
+        source=source,
+        source_id=source_id,
+        model=model,
+        input_tokens=int(usage.get("input_tokens") or 0),
+        cached_input_tokens=int(usage.get("cached_input_tokens") or 0),
+        output_tokens=int(usage.get("output_tokens") or 0),
+        total_tokens=int(usage.get("total_tokens") or 0),
+        estimated_cost_usd=_estimate_openai_cost(model, usage),
+    )
+    session.add(event)
+    session.commit()
+
+
+def _status_context(session: Session) -> dict[str, object]:
+    db_status = _database_status()
+    openai_usage = _openai_usage_summary(session)
+    server_info = _server_info(db_status)
+    return {
+        "db_status": db_status,
+        "openai_usage": openai_usage,
+        "server_info": server_info,
+    }
+
+
+def _database_status() -> dict[str, object]:
+    started = time.perf_counter()
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+            database_name = connection.execute(text("SELECT current_database()")).scalar_one_or_none()
+            try:
+                db_size = connection.execute(text("SELECT pg_size_pretty(pg_database_size(current_database()))")).scalar_one_or_none()
+            except Exception:
+                db_size = "-"
+        return {
+            "connected": True,
+            "label": "connected",
+            "database": database_name or "database",
+            "latency_ms": round((time.perf_counter() - started) * 1000),
+            "size": db_size or "-",
+        }
+    except Exception as exc:
+        return {
+            "connected": False,
+            "label": "offline",
+            "database": "database",
+            "latency_ms": None,
+            "size": "-",
+            "error": str(exc)[:120],
+        }
+
+
+def _openai_usage_summary(session: Session) -> dict[str, object]:
+    month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    total_requests = session.scalar(select(func.count(OpenAIUsageEvent.id))) or 0
+    month_requests = session.scalar(
+        select(func.count(OpenAIUsageEvent.id)).where(OpenAIUsageEvent.created_at >= month_start)
+    ) or 0
+    month_tokens = session.scalar(
+        select(func.coalesce(func.sum(OpenAIUsageEvent.total_tokens), 0)).where(OpenAIUsageEvent.created_at >= month_start)
+    ) or 0
+    month_cost = session.scalar(
+        select(func.coalesce(func.sum(OpenAIUsageEvent.estimated_cost_usd), 0)).where(OpenAIUsageEvent.created_at >= month_start)
+    ) or Decimal("0")
+    return {
+        "enabled": bool(os.getenv("OPENAI_API_KEY")),
+        "month_requests": int(month_requests),
+        "total_requests": int(total_requests),
+        "month_tokens": int(month_tokens),
+        "month_cost_usd": Decimal(str(month_cost or 0)),
+        "model": os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+    }
+
+
+def _server_info(db_status: dict[str, object]) -> dict[str, object]:
+    return {
+        "uptime": _format_duration(int(time.time() - APP_STARTED_AT)),
+        "load": _load_percent(),
+        "memory": _memory_info(),
+        "database": db_status,
+        "ocr_enabled": os.getenv("OCR_ENABLED", "true").strip().lower() not in {"0", "false", "nee", "no"},
+        "openai_enabled": bool(os.getenv("OPENAI_API_KEY")),
+    }
+
+
+def _load_percent() -> dict[str, object]:
+    try:
+        load_1 = os.getloadavg()[0]
+        cores = os.cpu_count() or 1
+        return {"percent": min(999, round((load_1 / cores) * 100, 1)), "label": f"load {load_1:.2f} - {cores} cores"}
+    except Exception:
+        return {"percent": 0, "label": "niet beschikbaar"}
+
+
+def _memory_info() -> dict[str, object]:
+    try:
+        meminfo = {}
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            key, value = line.split(":", 1)
+            meminfo[key] = int(value.strip().split()[0])
+        total = meminfo.get("MemTotal", 0)
+        available = meminfo.get("MemAvailable", 0)
+        used = max(total - available, 0)
+        percent = round((used / total) * 100, 1) if total else 0
+        return {"percent": percent, "label": f"{used / 1024 / 1024:.1f} GB / {total / 1024 / 1024:.1f} GB"}
+    except Exception:
+        return {"percent": 0, "label": "niet beschikbaar"}
+
+
+def _format_duration(seconds: int) -> str:
+    delta = timedelta(seconds=max(seconds, 0))
+    days = delta.days
+    hours, remainder = divmod(delta.seconds, 3600)
+    minutes, _ = divmod(remainder, 60)
+    if days:
+        return f"{days}d {hours}u"
+    if hours:
+        return f"{hours}u {minutes}m"
+    return f"{minutes}m"
+
+
+def _estimate_openai_cost(model: str, usage: dict) -> Decimal:
+    pricing = {
+        "gpt-4.1-mini": {"input": Decimal("0.25"), "cached_input": Decimal("0.025"), "output": Decimal("2.00")},
+        "gpt-4.1": {"input": Decimal("2.00"), "cached_input": Decimal("0.50"), "output": Decimal("8.00")},
+        "gpt-5-mini": {"input": Decimal("0.25"), "cached_input": Decimal("0.025"), "output": Decimal("2.00")},
+        "gpt-5-nano": {"input": Decimal("0.05"), "cached_input": Decimal("0.005"), "output": Decimal("0.40")},
+    }.get(model, {"input": Decimal("0.25"), "cached_input": Decimal("0.025"), "output": Decimal("2.00")})
+    input_tokens = max(int(usage.get("input_tokens") or 0) - int(usage.get("cached_input_tokens") or 0), 0)
+    cached_tokens = int(usage.get("cached_input_tokens") or 0)
+    output_tokens = int(usage.get("output_tokens") or 0)
+    cost = (
+        Decimal(input_tokens) * pricing["input"]
+        + Decimal(cached_tokens) * pricing["cached_input"]
+        + Decimal(output_tokens) * pricing["output"]
+    ) / Decimal("1000000")
+    return cost.quantize(Decimal("0.0001"))

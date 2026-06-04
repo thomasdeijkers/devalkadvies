@@ -68,6 +68,61 @@
     </article>
   </section>
 
+  <section class="server-overview">
+    <div class="section-heading">
+      <div>
+        <span class="eyebrow">Server</span>
+        <h2>Server overzicht</h2>
+        <p>Live signalen van app, database, OCR en OpenAI-verbruik.</p>
+      </div>
+      <a class="ghost-button" href="/">Refresh</a>
+    </div>
+    <div class="server-grid">
+      <article>
+        <span>Database connectie</span>
+        <strong>{{ "OK" if db_status.connected else "Fout" }}</strong>
+        <small>{{ db_status.database }}{% if db_status.latency_ms %} - {{ db_status.latency_ms }} ms{% endif %}</small>
+        <i style="width: {{ 100 if db_status.connected else 18 }}%"></i>
+      </article>
+      <article>
+        <span>Server belasting</span>
+        <strong>{{ server_info.load.percent }}%</strong>
+        <small>{{ server_info.load.label }}</small>
+        <i style="width: {{ server_info.load.percent if server_info.load.percent < 100 else 100 }}%"></i>
+      </article>
+      <article>
+        <span>Geheugen</span>
+        <strong>{{ server_info.memory.percent }}%</strong>
+        <small>{{ server_info.memory.label }}</small>
+        <i style="width: {{ server_info.memory.percent }}%"></i>
+      </article>
+      <article>
+        <span>Database gebruik</span>
+        <strong>{{ db_status.size }}</strong>
+        <small>huidige databasegrootte</small>
+        <i style="width: 18%"></i>
+      </article>
+      <article>
+        <span>OpenAI deze maand</span>
+        <strong>${{ "%.2f"|format(openai_usage.month_cost_usd|float) }}</strong>
+        <small>{{ openai_usage.month_requests }} parsings · {{ openai_usage.month_tokens }} tokens</small>
+        <i style="width: {{ 18 + openai_usage.month_requests * 8 if openai_usage.month_requests < 10 else 100 }}%"></i>
+      </article>
+      <article>
+        <span>Parser services</span>
+        <strong>{{ "OK" if server_info.ocr_enabled and server_info.openai_enabled else "Deels" }}</strong>
+        <small>OCR {{ "aan" if server_info.ocr_enabled else "uit" }} · OpenAI {{ "aan" if server_info.openai_enabled else "uit" }}</small>
+        <i style="width: {{ 100 if server_info.ocr_enabled and server_info.openai_enabled else 55 }}%"></i>
+      </article>
+      <article>
+        <span>App uptime</span>
+        <strong>{{ server_info.uptime }}</strong>
+        <small>huidige container</small>
+        <i style="width: 80%"></i>
+      </article>
+    </div>
+  </section>
+
   <section id="relations" class="data-grid">
     <article class="panel data-form-panel">
       <span class="chip manual">Aanvullen</span>

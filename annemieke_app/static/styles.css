@@ -152,6 +152,53 @@ a {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.sidebar-status {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.status-mini {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  gap: 9px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.status-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+  color: #bfffe0;
+  background: rgba(45, 227, 138, 0.12);
+  border: 1px solid rgba(45, 227, 138, 0.32);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.status-icon.ai {
+  color: #bfffe0;
+}
+
+.status-mini span,
+.status-mini small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.status-mini strong {
+  display: inline;
+  color: #fff;
+  font-size: 15px;
+}
+
 .sidebar-footer span {
   color: var(--muted);
   font-size: 11px;
@@ -334,6 +381,61 @@ button:hover {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+}
+
+.server-overview {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background:
+    linear-gradient(90deg, rgba(17, 44, 76, 0.96), rgba(32, 61, 109, 0.76)),
+    rgba(255, 255, 255, 0.05);
+  box-shadow: var(--shadow);
+}
+
+.server-overview p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.server-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.server-grid article {
+  display: grid;
+  gap: 4px;
+  padding: 15px 16px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(9, 30, 56, 0.72);
+}
+
+.server-grid span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.server-grid strong {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.server-grid small {
+  color: var(--muted);
+}
+
+.server-grid i {
+  display: block;
+  max-width: 100%;
+  height: 5px;
+  margin-top: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #74d7a2, #70d7ef);
 }
 
 .data-grid {
@@ -794,7 +896,8 @@ pre {
   .detail-grid,
   .metrics,
   .pipeline-grid,
-  .data-grid {
+  .data-grid,
+  .server-grid {
     grid-template-columns: 1fr;
   }
 }

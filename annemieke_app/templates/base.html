@@ -28,6 +28,24 @@
           <a href="/"><span>Controle</span><i></i></a>
           <a href="/"><span>Instellingen</span><i class="idle"></i></a>
         </nav>
+        <div class="sidebar-status">
+          <article class="status-mini">
+            <span class="status-icon">DB</span>
+            <div>
+              <span>Database</span>
+              <strong>{{ db_status.label if db_status is defined else "unknown" }}</strong>
+              <small>{{ db_status.database if db_status is defined else "Dashboard database" }}</small>
+            </div>
+          </article>
+          <article class="status-mini">
+            <span class="status-icon ai">AI</span>
+            <div>
+              <span>ChatGPT deze maand</span>
+              <strong>${{ "%.2f"|format(openai_usage.month_cost_usd|float) if openai_usage is defined else "0.00" }}</strong>
+              <small>{{ openai_usage.month_requests if openai_usage is defined else 0 }} parsing{% if openai_usage is defined and openai_usage.month_requests != 1 %}s{% endif %}</small>
+            </div>
+          </article>
+        </div>
         <div class="sidebar-footer">
           <span>Werkgebieden</span>
           <strong>Budgetteren · Begroten · Bewaken · Beoordelen</strong>
