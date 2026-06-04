@@ -9,6 +9,7 @@
     <span class="eyebrow">Begroting controleren</span>
     <h1>{{ document.original_filename }}</h1>
     <div class="meta-line">
+      <span>{{ document.project_name or "Geen project gekoppeld" }}</span>
       <mark class="status {{ document.status }}">{{ document.status }}</mark>
       <span>{{ document.created_at.strftime("%d-%m-%Y %H:%M") if document.created_at else "" }}</span>
     </div>
@@ -21,6 +22,13 @@
       <button name="status" value="processed" type="submit">Verwerkt</button>
       <button name="status" value="archived" type="submit">Archiveren</button>
       <a class="button-link" href="/documents/{{ document.id }}/export.xlsx">Excel</a>
+    </form>
+
+    <form action="/documents/{{ document.id }}/meta" method="post" class="meta-form">
+      <input name="project_name" value="{{ document.project_name or '' }}" placeholder="Projectnaam">
+      <input name="document_type" value="{{ document.document_type or '' }}" placeholder="Documenttype">
+      <input name="source" value="{{ document.source or '' }}" placeholder="Bron / leverancier">
+      <button type="submit">Opslaan</button>
     </form>
   </article>
 
@@ -41,23 +49,42 @@
           <span>Totaal</span>
         </div>
         {% for line in document.budget_lines %}
-          <div class="budget-row">
-            <span>{{ line.omschrijving_werkzaamheden }}</span>
-            <span>{{ line.hoeveelheid or "" }}</span>
-            <span>{{ line.eenheid or "" }}</span>
-            <span>{{ line.norm_arbeid or "" }}</span>
-            <span>{{ line.uren or "" }}</span>
-            <span>{{ line.materiaal or "" }}</span>
-            <span>{{ line.materieel or "" }}</span>
-            <span>{{ line.onderaannemer or "" }}</span>
-            <span>{{ line.eenheidsprijs or "" }}</span>
-            <span>{{ line.totaal_prijs_per_regel or "" }}</span>
-          </div>
+          <form class="budget-row editable" action="/documents/{{ document.id }}/lines/{{ line.id }}" method="post">
+            <input name="omschrijving_werkzaamheden" value="{{ line.omschrijving_werkzaamheden }}">
+            <input name="hoeveelheid" value="{{ line.hoeveelheid or '' }}">
+            <input name="eenheid" value="{{ line.eenheid or '' }}">
+            <input name="norm_arbeid" value="{{ line.norm_arbeid or '' }}">
+            <input name="uren" value="{{ line.uren or '' }}">
+            <input name="materiaal" value="{{ line.materiaal or '' }}">
+            <input name="materieel" value="{{ line.materieel or '' }}">
+            <input name="onderaannemer" value="{{ line.onderaannemer or '' }}">
+            <input name="eenheidsprijs" value="{{ line.eenheidsprijs or '' }}">
+            <span class="line-actions">
+              <input name="totaal_prijs_per_regel" value="{{ line.totaal_prijs_per_regel or '' }}">
+              <button type="submit">OK</button>
+            </span>
+          </form>
         {% endfor %}
       </div>
     {% else %}
       <p class="muted">Er zijn nog geen begrotingsregels gevonden.</p>
     {% endif %}
+
+    <form class="budget-row add-line-form" action="/documents/{{ document.id }}/lines" method="post">
+      <input name="omschrijving_werkzaamheden" placeholder="Nieuwe omschrijving">
+      <input name="hoeveelheid" placeholder="Hvh">
+      <input name="eenheid" placeholder="Ehd">
+      <input name="norm_arbeid" placeholder="Norm">
+      <input name="uren" placeholder="Uren">
+      <input name="materiaal" placeholder="Materiaal">
+      <input name="materieel" placeholder="Materieel">
+      <input name="onderaannemer" placeholder="O.A.">
+      <input name="eenheidsprijs" placeholder="Ehprijs">
+      <span class="line-actions">
+        <input name="totaal_prijs_per_regel" placeholder="Totaal">
+        <button type="submit">+</button>
+      </span>
+    </form>
   </article>
 
   <article class="panel">

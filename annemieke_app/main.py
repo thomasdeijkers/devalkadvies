@@ -1,3 +1,4 @@
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from uuid import uuid4
 
@@ -27,13 +28,30 @@ def startup() -> None:
 
 
 @app.get("/", response_class=HTMLResponse)
-def dashboard(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
+def dashboard(
+    request: Request,
+    project: str | None = None,
+    status: str | None = None,
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    document_query = select(IncomingDocument)
+    if project:
+        document_query = document_query.where(IncomingDocument.project_name.ilike(f"%{project.strip()}%"))
+    if status:
+        document_query = document_query.where(IncomingDocument.status == status)
+
     total = session.scalar(select(func.count(IncomingDocument.id))) or 0
     needs_review = session.scalar(
         select(func.count(IncomingDocument.id)).where(IncomingDocument.status == "needs_review")
     ) or 0
     processed = session.scalar(select(func.count(IncomingDocument.id)).where(IncomingDocument.status == "processed")) or 0
-    documents = session.scalars(select(IncomingDocument).order_by(IncomingDocument.created_at.desc()).limit(12)).all()
+    documents = session.scalars(document_query.order_by(IncomingDocument.created_at.desc()).limit(30)).all()
+    projects = session.scalars(
+        select(IncomingDocument.project_name)
+        .where(IncomingDocument.project_name.is_not(None))
+        .group_by(IncomingDocument.project_name)
+        .order_by(IncomingDocument.project_name)
+    ).all()
 
     return templates.TemplateResponse(
         request=request,
@@ -45,6 +63,9 @@ def dashboard(request: Request, session: Session = Depends(get_session)) -> HTML
             "needs_review": needs_review,
             "processed": processed,
             "documents": documents,
+            "projects": projects,
+            "selected_project": project or "",
+            "selected_status": status or "",
         },
     )
 
@@ -55,7 +76,11 @@ def logo() -> FileResponse:
 
 
 @app.post("/documents", response_class=HTMLResponse)
-async def upload_document(file: UploadFile = File(...), session: Session = Depends(get_session)) -> RedirectResponse:
+async def upload_document(
+    project_name: str = Form(""),
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Upload een PDF-bestand.")
 
@@ -68,6 +93,7 @@ async def upload_document(file: UploadFile = File(...), session: Session = Depen
     document = IncomingDocument(
         original_filename=file.filename,
         stored_filename=stored_filename,
+        project_name=project_name.strip() or None,
         status="needs_review",
         parsed_text=parsed.text,
         parser_notes=parsed.notes,
@@ -118,6 +144,25 @@ def document_detail(
     )
 
 
+@app.post("/documents/{document_id}/meta")
+def update_document_meta(
+    document_id: int,
+    project_name: str = Form(""),
+    document_type: str = Form(""),
+    source: str = Form(""),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    document = session.get(IncomingDocument, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document niet gevonden.")
+
+    document.project_name = project_name.strip() or None
+    document.document_type = document_type.strip() or None
+    document.source = source.strip() or None
+    session.commit()
+    return RedirectResponse(f"/documents/{document.id}", status_code=303)
+
+
 @app.post("/documents/{document_id}/fields")
 def add_field(
     document_id: int,
@@ -160,6 +205,98 @@ def update_status(
     return RedirectResponse(f"/documents/{document.id}", status_code=303)
 
 
+@app.post("/documents/{document_id}/lines/{line_id}")
+def update_budget_line(
+    document_id: int,
+    line_id: int,
+    omschrijving_werkzaamheden: str = Form(""),
+    hoeveelheid: str = Form(""),
+    eenheid: str = Form(""),
+    norm_arbeid: str = Form(""),
+    uren: str = Form(""),
+    materiaal: str = Form(""),
+    materieel: str = Form(""),
+    onderaannemer: str = Form(""),
+    eenheidsprijs: str = Form(""),
+    totaal_prijs_per_regel: str = Form(""),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    line = session.get(BudgetLine, line_id)
+    if line is None or line.document_id != document_id:
+        raise HTTPException(status_code=404, detail="Begrotingsregel niet gevonden.")
+
+    line.omschrijving_werkzaamheden = omschrijving_werkzaamheden.strip()
+    line.hoeveelheid = _decimal_or_none(hoeveelheid)
+    line.eenheid = eenheid.strip() or None
+    line.norm_arbeid = _decimal_or_none(norm_arbeid)
+    line.uren = _decimal_or_none(uren)
+    line.materiaal = _decimal_or_none(materiaal)
+    line.materieel = _decimal_or_none(materieel)
+    line.onderaannemer = _decimal_or_none(onderaannemer)
+    line.eenheidsprijs = _decimal_or_none(eenheidsprijs)
+    line.totaal_prijs_per_regel = _decimal_or_none(totaal_prijs_per_regel)
+    line.confidence = 100
+    session.commit()
+    return RedirectResponse(f"/documents/{document_id}", status_code=303)
+
+
+@app.post("/documents/{document_id}/lines")
+def add_budget_line(
+    document_id: int,
+    omschrijving_werkzaamheden: str = Form(""),
+    hoeveelheid: str = Form(""),
+    eenheid: str = Form(""),
+    norm_arbeid: str = Form(""),
+    uren: str = Form(""),
+    materiaal: str = Form(""),
+    materieel: str = Form(""),
+    onderaannemer: str = Form(""),
+    eenheidsprijs: str = Form(""),
+    totaal_prijs_per_regel: str = Form(""),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    document = session.get(IncomingDocument, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document niet gevonden.")
+
+    next_line_number = len(document.budget_lines) + 1
+    session.add(
+        BudgetLine(
+            document_id=document.id,
+            line_number=next_line_number,
+            omschrijving_werkzaamheden=omschrijving_werkzaamheden.strip(),
+            hoeveelheid=_decimal_or_none(hoeveelheid),
+            eenheid=eenheid.strip() or None,
+            norm_arbeid=_decimal_or_none(norm_arbeid),
+            uren=_decimal_or_none(uren),
+            materiaal=_decimal_or_none(materiaal),
+            materieel=_decimal_or_none(materieel),
+            onderaannemer=_decimal_or_none(onderaannemer),
+            eenheidsprijs=_decimal_or_none(eenheidsprijs),
+            totaal_prijs_per_regel=_decimal_or_none(totaal_prijs_per_regel),
+            confidence=100,
+            raw_text="handmatig toegevoegd",
+        )
+    )
+    session.commit()
+    return RedirectResponse(f"/documents/{document.id}", status_code=303)
+
+
+@app.post("/documents/{document_id}/lines/{line_id}/delete")
+def delete_budget_line(
+    document_id: int,
+    line_id: int,
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    line = session.get(BudgetLine, line_id)
+    if line is None or line.document_id != document_id:
+        raise HTTPException(status_code=404, detail="Begrotingsregel niet gevonden.")
+
+    session.delete(line)
+    session.commit()
+    return RedirectResponse(f"/documents/{document_id}", status_code=303)
+
+
 @app.get("/documents/{document_id}/export.xlsx")
 def export_document(document_id: int, session: Session = Depends(get_session)) -> StreamingResponse:
     document = session.get(IncomingDocument, document_id)
@@ -184,6 +321,7 @@ def document_json(document_id: int, session: Session = Depends(get_session)) -> 
     return {
         "id": document.id,
         "filename": document.original_filename,
+        "project_name": document.project_name,
         "status": document.status,
         "document_type": document.document_type,
         "fields": [
@@ -196,3 +334,17 @@ def document_json(document_id: int, session: Session = Depends(get_session)) -> 
             for field in document.fields
         ],
     }
+
+
+def _decimal_or_none(value: str) -> Decimal | None:
+    cleaned = value.strip().replace(" ", "")
+    if not cleaned:
+        return None
+    if "," in cleaned and "." in cleaned:
+        cleaned = cleaned.replace(".", "").replace(",", ".")
+    elif "," in cleaned:
+        cleaned = cleaned.replace(",", ".")
+    try:
+        return Decimal(cleaned)
+    except InvalidOperation:
+        return None

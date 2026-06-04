@@ -11,6 +11,7 @@
       <p>Upload begrotingen, herken regels uit PDF-tekst en controleer de kolommen voordat je exporteert.</p>
     </div>
     <form action="/documents" method="post" enctype="multipart/form-data" class="upload-form">
+      <input name="project_name" placeholder="Projectnaam">
       <label class="file-picker">
         <input id="file" name="file" type="file" accept="application/pdf" required>
         <span>PDF kiezen</span>
@@ -64,10 +65,21 @@
   <section class="document-list">
     <div class="section-heading">
       <h2>Recente stukken</h2>
+      <form action="/" method="get" class="filter-form">
+        <input name="project" value="{{ selected_project }}" placeholder="Zoek project">
+        <select name="status">
+          <option value="">Alle statussen</option>
+          <option value="needs_review" {% if selected_status == "needs_review" %}selected{% endif %}>Te controleren</option>
+          <option value="processed" {% if selected_status == "processed" %}selected{% endif %}>Verwerkt</option>
+          <option value="archived" {% if selected_status == "archived" %}selected{% endif %}>Archief</option>
+        </select>
+        <button type="submit">Zoeken</button>
+      </form>
     </div>
     {% if documents %}
       <div class="table">
         <div class="table-row table-head">
+          <span>Project</span>
           <span>Bestand</span>
           <span>Status</span>
           <span>Regels</span>
@@ -75,6 +87,7 @@
         </div>
         {% for document in documents %}
           <a class="table-row" href="/documents/{{ document.id }}">
+            <span>{{ document.project_name or "Geen project" }}</span>
             <span>{{ document.original_filename }}</span>
             <span><mark class="status {{ document.status }}">{{ document.status }}</mark></span>
             <span>{{ document.budget_lines|length }}</span>

@@ -14,6 +14,7 @@ class IncomingDocument(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     stored_filename: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    project_name: Mapped[str | None] = mapped_column(String(180), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(40), default="new", index=True)
     document_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
     source: Mapped[str | None] = mapped_column(String(120), nullable=True)

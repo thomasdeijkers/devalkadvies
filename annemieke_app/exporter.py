@@ -1,7 +1,8 @@
 from io import BytesIO
 
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.utils import get_column_letter
 
 from .models import IncomingDocument
@@ -26,11 +27,24 @@ def budget_document_to_xlsx(document: IncomingDocument) -> BytesIO:
     sheet = workbook.active
     sheet.title = "Begroting"
 
+    sheet["A1"] = "Project"
+    sheet["B1"] = document.project_name or ""
+    sheet["A2"] = "Bronbestand"
+    sheet["B2"] = document.original_filename
+    sheet["A3"] = "Status"
+    sheet["B3"] = document.status
+    for row in range(1, 4):
+        sheet[f"A{row}"].font = Font(bold=True, color="1F4E78")
+        sheet[f"B{row}"].font = Font(bold=True)
+
+    start_row = 5
+    sheet.append([])
     sheet.append(HEADERS)
-    for cell in sheet[1]:
+    for cell in sheet[start_row]:
         cell.font = Font(bold=True)
-        cell.fill = PatternFill(fill_type="solid", fgColor="EAF0F3")
+        cell.fill = PatternFill(fill_type="solid", fgColor="D9EAF7")
         cell.alignment = Alignment(horizontal="center")
+        cell.border = Border(bottom=Side(style="thin", color="7F7F7F"))
 
     for line in document.budget_lines:
         sheet.append(
@@ -52,10 +66,31 @@ def budget_document_to_xlsx(document: IncomingDocument) -> BytesIO:
     for index, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = width
 
-    for row in sheet.iter_rows(min_row=2):
+    for row in sheet.iter_rows(min_row=start_row + 1):
         row[0].alignment = Alignment(wrap_text=True, vertical="top")
         for cell in row[1:]:
             cell.alignment = Alignment(horizontal="right")
+        for cell in row:
+            cell.border = Border(bottom=Side(style="hair", color="D9D9D9"))
+
+    for row in sheet.iter_rows(min_row=start_row + 1, min_col=2, max_col=10):
+        for cell in row:
+            if cell.column == 3:
+                continue
+            cell.number_format = '#,##0.00'
+
+    last_row = max(start_row + len(document.budget_lines), start_row)
+    table = Table(displayName="BegrotingRegels", ref=f"A{start_row}:J{last_row}")
+    table.tableStyleInfo = TableStyleInfo(
+        name="TableStyleMedium2",
+        showFirstColumn=False,
+        showLastColumn=False,
+        showRowStripes=True,
+        showColumnStripes=False,
+    )
+    sheet.add_table(table)
+    sheet.freeze_panes = f"A{start_row + 1}"
+    sheet.auto_filter.ref = f"A{start_row}:J{last_row}"
 
     stream = BytesIO()
     workbook.save(stream)

@@ -281,7 +281,7 @@ button:hover {
 
 .upload-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px;
+  grid-template-columns: minmax(0, 1fr) 170px 150px;
   gap: 10px;
 }
 
@@ -383,7 +383,7 @@ button:hover {
 
 .table-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1.5fr) 140px 90px 120px;
+  grid-template-columns: minmax(160px, 0.9fr) minmax(220px, 1.4fr) 140px 90px 120px;
   gap: 14px;
   align-items: center;
   min-height: 52px;
@@ -456,10 +456,27 @@ button:hover {
 
 .meta-line,
 .status-form,
-.field-form {
+.field-form,
+.filter-form,
+.meta-form {
   display: flex;
   gap: 10px;
   align-items: center;
+}
+
+.filter-form {
+  width: min(620px, 100%);
+}
+
+.filter-form input,
+.filter-form select {
+  min-width: 0;
+}
+
+.meta-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 120px;
+  margin-top: 14px;
 }
 
 .note {
@@ -484,6 +501,29 @@ button:hover {
   min-height: 42px;
   padding: 8px 12px;
   border-top: 1px solid rgba(126, 169, 219, 0.18);
+}
+
+.budget-row.editable,
+.add-line-form {
+  border: 0;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.budget-row input {
+  min-height: 30px;
+  padding: 5px 7px;
+  font-size: 12px;
+}
+
+.line-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 6px;
+}
+
+.line-actions button {
+  min-height: 30px;
+  padding: 0;
 }
 
 .budget-row:first-child {
@@ -520,7 +560,8 @@ button:hover {
   color: var(--muted);
 }
 
-input {
+input,
+select {
   width: 100%;
   min-height: 38px;
   padding: 8px 10px;
@@ -528,6 +569,10 @@ input {
   border: 1px solid var(--line);
   border-radius: 7px;
   background: rgba(4, 19, 38, 0.55);
+}
+
+select {
+  appearance: none;
 }
 
 .text-panel {
@@ -578,7 +623,9 @@ pre {
   .topbar,
   .upload-form,
   .status-form,
-  .field-form {
+  .field-form,
+  .filter-form,
+  .meta-form {
     display: grid;
     grid-template-columns: 1fr;
   }
