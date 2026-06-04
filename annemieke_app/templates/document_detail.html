@@ -23,8 +23,17 @@
       <button name="status" value="archived" type="submit">Archiveren</button>
       <a class="button-link" href="/documents/{{ document.id }}/export.xlsx">Excel</a>
     </form>
+    <form action="/documents/{{ document.id }}/reparse-openai" method="post" class="status-form">
+      <button type="submit">Opnieuw parsen met OpenAI</button>
+    </form>
 
     <form action="/documents/{{ document.id }}/meta" method="post" class="meta-form">
+      <select name="project_id">
+        <option value="">Geen projectkoppeling</option>
+        {% for project in project_options %}
+          <option value="{{ project.id }}" {% if document.project_id == project.id %}selected{% endif %}>{{ project.project_number or "zonder nr" }} - {{ project.name }}</option>
+        {% endfor %}
+      </select>
       <input name="project_name" value="{{ document.project_name or '' }}" placeholder="Projectnaam">
       <input name="document_type" value="{{ document.document_type or '' }}" placeholder="Documenttype">
       <input name="source" value="{{ document.source or '' }}" placeholder="Bron / leverancier">

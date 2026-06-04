@@ -38,6 +38,9 @@ def _apply_lightweight_migrations() -> None:
     if "project_name" not in document_columns:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE incoming_documents ADD COLUMN project_name VARCHAR(180)"))
+    if "project_id" not in document_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE incoming_documents ADD COLUMN project_id INTEGER"))
 
 
 def get_session() -> Generator[Session, None, None]:

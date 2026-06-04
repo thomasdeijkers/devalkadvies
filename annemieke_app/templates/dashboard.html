@@ -12,6 +12,12 @@
     </div>
     <form action="/documents" method="post" enctype="multipart/form-data" class="upload-form">
       <input name="project_name" placeholder="Projectnaam">
+      <select name="project_id">
+        <option value="">Koppel project</option>
+        {% for project in project_options %}
+          <option value="{{ project.id }}">{{ project.project_number or "zonder nr" }} - {{ project.name }}</option>
+        {% endfor %}
+      </select>
       <label class="file-picker">
         <input id="file" name="file" type="file" accept="application/pdf" required>
         <span>PDF kiezen</span>
@@ -62,7 +68,102 @@
     </article>
   </section>
 
-  <section class="document-list">
+  <section id="relations" class="data-grid">
+    <article class="panel data-form-panel">
+      <span class="chip manual">Aanvullen</span>
+      <h3>Nieuwe relatie</h3>
+      <form action="/relations" method="post" class="stack-form">
+        <select name="relation_type">
+          <option value="opdrachtgever">Opdrachtgever</option>
+          <option value="architect">Architect</option>
+          <option value="constructeur">Constructeur</option>
+          <option value="aannemer">Aannemer</option>
+          <option value="overig">Overig</option>
+        </select>
+        <input name="name" placeholder="Naam relatie" required>
+        <input name="contact_name" placeholder="Contactpersoon">
+        <input name="address" placeholder="Adres">
+        <div class="split-fields">
+          <input name="postal_code" placeholder="Postcode">
+          <input name="city" placeholder="Plaats">
+        </div>
+        <input name="phone" placeholder="Telefoon">
+        <input name="email" placeholder="E-mail">
+        <input name="website" placeholder="Website">
+        <textarea name="notes" placeholder="Notities"></textarea>
+        <button type="submit">Relatie opslaan</button>
+      </form>
+    </article>
+
+    <article class="panel card-list-panel">
+      <div class="section-heading">
+        <h2>Relaties / opdrachtgevers</h2>
+      </div>
+      <div class="entity-grid">
+        {% for relation in relations %}
+          <a class="entity-card" href="#relation-{{ relation.id }}">
+            <span class="entity-type">{{ relation.relation_type }}</span>
+            <strong>{{ relation.name }}</strong>
+            <small>{{ relation.city or "Geen plaats" }}</small>
+          </a>
+        {% else %}
+          <p class="muted">Nog geen relaties toegevoegd.</p>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+
+  <section id="projects" class="data-grid">
+    <article class="panel data-form-panel">
+      <span class="chip automatic">Projectkaart</span>
+      <h3>Nieuw project</h3>
+      <form action="/projects" method="post" class="stack-form">
+        <input name="project_number" placeholder="Projectnummer">
+        <input name="name" placeholder="Projectomschrijving" required>
+        <input name="location" placeholder="Locatie">
+        <select name="client_relation_id">
+          <option value="">Opdrachtgever</option>
+          {% for relation in relation_options %}
+            <option value="{{ relation.id }}">{{ relation.name }}</option>
+          {% endfor %}
+        </select>
+        <select name="architect_relation_id">
+          <option value="">Architect</option>
+          {% for relation in relation_options %}
+            <option value="{{ relation.id }}">{{ relation.name }}</option>
+          {% endfor %}
+        </select>
+        <select name="constructor_relation_id">
+          <option value="">Constructeur</option>
+          {% for relation in relation_options %}
+            <option value="{{ relation.id }}">{{ relation.name }}</option>
+          {% endfor %}
+        </select>
+        <textarea name="description" placeholder="Projectbeschrijving"></textarea>
+        <textarea name="notes" placeholder="Notities"></textarea>
+        <button type="submit">Project opslaan</button>
+      </form>
+    </article>
+
+    <article class="panel card-list-panel">
+      <div class="section-heading">
+        <h2>Projecten</h2>
+      </div>
+      <div class="entity-grid">
+        {% for project in projects %}
+          <a class="entity-card" href="#project-{{ project.id }}">
+            <span class="entity-type">{{ project.project_number or "geen nr" }}</span>
+            <strong>{{ project.name }}</strong>
+            <small>{{ project.client.name if project.client else "Geen opdrachtgever" }}</small>
+          </a>
+        {% else %}
+          <p class="muted">Nog geen projecten toegevoegd.</p>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+
+  <section id="documents" class="document-list">
     <div class="section-heading">
       <h2>Recente stukken</h2>
       <form action="/" method="get" class="filter-form">
@@ -84,15 +185,30 @@
           <span>Status</span>
           <span>Regels</span>
           <span>Datum</span>
+          <span>Acties</span>
         </div>
         {% for document in documents %}
-          <a class="table-row" href="/documents/{{ document.id }}">
+          <div class="table-row">
             <span>{{ document.project_name or "Geen project" }}</span>
-            <span>{{ document.original_filename }}</span>
+            <a class="file-link" href="/documents/{{ document.id }}">{{ document.original_filename }}</a>
             <span><mark class="status {{ document.status }}">{{ document.status }}</mark></span>
             <span>{{ document.budget_lines|length }}</span>
             <span>{{ document.created_at.strftime("%d-%m-%Y") if document.created_at else "" }}</span>
-          </a>
+            <span class="row-actions">
+              {% if document.status == "archived" %}
+                <form action="/documents/{{ document.id }}/status" method="post">
+                  <button class="mini-button" name="status" value="needs_review" type="submit">Terugzetten</button>
+                </form>
+              {% else %}
+                <form action="/documents/{{ document.id }}/status" method="post">
+                  <button class="mini-button" name="status" value="archived" type="submit">Archiveren</button>
+                </form>
+              {% endif %}
+              <form action="/documents/{{ document.id }}/delete" method="post" onsubmit="return confirm('Dit stuk definitief verwijderen?');">
+                <button class="mini-button danger" type="submit">Verwijderen</button>
+              </form>
+            </span>
+          </div>
         {% endfor %}
       </div>
     {% else %}
@@ -103,4 +219,92 @@
     {% endif %}
   </section>
 </section>
+
+{% for relation in relations %}
+  <div id="relation-{{ relation.id }}" class="modal-card">
+    <a class="modal-backdrop" href="#relations"></a>
+    <article class="modal-panel">
+      <a class="modal-close" href="#relations">Sluiten</a>
+      <span class="entity-type">{{ relation.relation_type }}</span>
+      <h2>{{ relation.name }}</h2>
+      <div class="business-card">
+        <strong>{{ relation.name }}</strong>
+        <span>{{ relation.contact_name or "" }}</span>
+        <span>{{ relation.address or "" }}</span>
+        <span>{{ relation.postal_code or "" }} {{ relation.city or "" }}</span>
+        <span>{{ relation.phone or "" }}</span>
+        <span>{{ relation.email or "" }}</span>
+        <span>{{ relation.website or "" }}</span>
+      </div>
+      <form action="/relations/{{ relation.id }}" method="post" class="stack-form">
+        <select name="relation_type">
+          {% for relation_type in ["opdrachtgever", "architect", "constructeur", "aannemer", "overig"] %}
+            <option value="{{ relation_type }}" {% if relation.relation_type == relation_type %}selected{% endif %}>{{ relation_type }}</option>
+          {% endfor %}
+        </select>
+        <input name="name" value="{{ relation.name }}" required>
+        <input name="contact_name" value="{{ relation.contact_name or '' }}" placeholder="Contactpersoon">
+        <input name="address" value="{{ relation.address or '' }}" placeholder="Adres">
+        <div class="split-fields">
+          <input name="postal_code" value="{{ relation.postal_code or '' }}" placeholder="Postcode">
+          <input name="city" value="{{ relation.city or '' }}" placeholder="Plaats">
+        </div>
+        <input name="phone" value="{{ relation.phone or '' }}" placeholder="Telefoon">
+        <input name="email" value="{{ relation.email or '' }}" placeholder="E-mail">
+        <input name="website" value="{{ relation.website or '' }}" placeholder="Website">
+        <textarea name="notes" placeholder="Notities">{{ relation.notes or "" }}</textarea>
+        <button type="submit">Relatie bijwerken</button>
+      </form>
+    </article>
+  </div>
+{% endfor %}
+
+{% for project in projects %}
+  <div id="project-{{ project.id }}" class="modal-card">
+    <a class="modal-backdrop" href="#projects"></a>
+    <article class="modal-panel wide">
+      <a class="modal-close" href="#projects">Sluiten</a>
+      <span class="entity-type">{{ project.status }}</span>
+      <h2>{{ project.name }}</h2>
+      <div class="project-summary">
+        <p><strong>Projectomschrijving</strong><span>{{ project.name }}</span></p>
+        <p><strong>Projectnr</strong><span>{{ project.project_number or "-" }}</span></p>
+        <p><strong>Opdrachtgever</strong><span>{{ project.client.name if project.client else "-" }}</span></p>
+        <p><strong>Architect</strong><span>{{ project.architect.name if project.architect else "-" }}</span></p>
+        <p><strong>Constructeur</strong><span>{{ project.constructor.name if project.constructor else "-" }}</span></p>
+      </div>
+      <form action="/projects/{{ project.id }}" method="post" class="stack-form">
+        <input name="project_number" value="{{ project.project_number or '' }}" placeholder="Projectnummer">
+        <input name="name" value="{{ project.name }}" placeholder="Projectomschrijving" required>
+        <input name="location" value="{{ project.location or '' }}" placeholder="Locatie">
+        <select name="status">
+          {% for project_status in ["actief", "offerte", "afgerond", "archief"] %}
+            <option value="{{ project_status }}" {% if project.status == project_status %}selected{% endif %}>{{ project_status }}</option>
+          {% endfor %}
+        </select>
+        <select name="client_relation_id">
+          <option value="">Opdrachtgever</option>
+          {% for relation in relation_options %}
+            <option value="{{ relation.id }}" {% if project.client_relation_id == relation.id %}selected{% endif %}>{{ relation.name }}</option>
+          {% endfor %}
+        </select>
+        <select name="architect_relation_id">
+          <option value="">Architect</option>
+          {% for relation in relation_options %}
+            <option value="{{ relation.id }}" {% if project.architect_relation_id == relation.id %}selected{% endif %}>{{ relation.name }}</option>
+          {% endfor %}
+        </select>
+        <select name="constructor_relation_id">
+          <option value="">Constructeur</option>
+          {% for relation in relation_options %}
+            <option value="{{ relation.id }}" {% if project.constructor_relation_id == relation.id %}selected{% endif %}>{{ relation.name }}</option>
+          {% endfor %}
+        </select>
+        <textarea name="description" placeholder="Projectbeschrijving">{{ project.description or "" }}</textarea>
+        <textarea name="notes" placeholder="Notities">{{ project.notes or "" }}</textarea>
+        <button type="submit">Project bijwerken</button>
+      </form>
+    </article>
+  </div>
+{% endfor %}
 {% endblock %}

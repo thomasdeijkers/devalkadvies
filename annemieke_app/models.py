@@ -14,6 +14,7 @@ class IncomingDocument(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     stored_filename: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
     project_name: Mapped[str | None] = mapped_column(String(180), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(40), default="new", index=True)
     document_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -33,6 +34,60 @@ class IncomingDocument(Base):
         cascade="all, delete-orphan",
         order_by="BudgetLine.line_number",
     )
+    project: Mapped["Project | None"] = relationship(back_populates="documents")
+
+
+class Relation(Base):
+    __tablename__ = "relations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    relation_type: Mapped[str] = mapped_column(String(60), default="opdrachtgever", index=True)
+    name: Mapped[str] = mapped_column(String(180), nullable=False, index=True)
+    contact_name: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    address: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    postal_code: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    website: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    projects_as_client: Mapped[list["Project"]] = relationship(
+        back_populates="client",
+        foreign_keys="Project.client_relation_id",
+    )
+    projects_as_architect: Mapped[list["Project"]] = relationship(
+        back_populates="architect",
+        foreign_keys="Project.architect_relation_id",
+    )
+    projects_as_constructor: Mapped[list["Project"]] = relationship(
+        back_populates="constructor",
+        foreign_keys="Project.constructor_relation_id",
+    )
+
+
+class Project(Base):
+    __tablename__ = "projects"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_number: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(220), nullable=False, index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    location: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    status: Mapped[str] = mapped_column(String(60), default="actief", index=True)
+    client_relation_id: Mapped[int | None] = mapped_column(ForeignKey("relations.id"), nullable=True, index=True)
+    architect_relation_id: Mapped[int | None] = mapped_column(ForeignKey("relations.id"), nullable=True)
+    constructor_relation_id: Mapped[int | None] = mapped_column(ForeignKey("relations.id"), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    client: Mapped[Relation | None] = relationship(foreign_keys=[client_relation_id], back_populates="projects_as_client")
+    architect: Mapped[Relation | None] = relationship(foreign_keys=[architect_relation_id], back_populates="projects_as_architect")
+    constructor: Mapped[Relation | None] = relationship(foreign_keys=[constructor_relation_id], back_populates="projects_as_constructor")
+    documents: Mapped[list[IncomingDocument]] = relationship(back_populates="project")
 
 
 class ExtractedField(Base):
