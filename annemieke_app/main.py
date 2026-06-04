@@ -36,8 +36,9 @@ def dashboard(request: Request, session: Session = Depends(get_session)) -> HTML
     documents = session.scalars(select(IncomingDocument).order_by(IncomingDocument.created_at.desc()).limit(12)).all()
 
     return templates.TemplateResponse(
-        "dashboard.html",
-        {
+        request=request,
+        name="dashboard.html",
+        context={
             "request": request,
             "app_name": settings.app_name,
             "total": total,
@@ -111,8 +112,9 @@ def document_detail(
         raise HTTPException(status_code=404, detail="Document niet gevonden.")
 
     return templates.TemplateResponse(
-        "document_detail.html",
-        {"request": request, "app_name": settings.app_name, "document": document},
+        request=request,
+        name="document_detail.html",
+        context={"request": request, "app_name": settings.app_name, "document": document},
     )
 
 
