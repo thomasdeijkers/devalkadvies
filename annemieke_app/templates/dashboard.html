@@ -1,18 +1,23 @@
 {% extends "base.html" %}
 
+{% block page_title %}Werkbak voor begrotingen{% endblock %}
+
 {% block content %}
 <section class="workspace">
-  <div class="panel upload-panel">
+  <section class="hero-band">
     <div>
-      <span class="eyebrow">Begrotingsparser</span>
-      <h1>Werkbak voor begrotingen</h1>
-      <p>Upload begrotings-PDF's, laat de parser regels herkennen en exporteer de gecontroleerde gegevens naar Excel voor verdere beoordeling.</p>
+      <span class="eyebrow accent">Automatisch</span>
+      <h2>PDF begroting naar controleerbare Excel-regels</h2>
+      <p>Upload begrotingen, herken regels uit PDF-tekst en controleer de kolommen voordat je exporteert.</p>
     </div>
     <form action="/documents" method="post" enctype="multipart/form-data" class="upload-form">
-      <input id="file" name="file" type="file" accept="application/pdf" required>
-      <button type="submit">Uploaden</button>
+      <label class="file-picker">
+        <input id="file" name="file" type="file" accept="application/pdf" required>
+        <span>PDF kiezen</span>
+      </label>
+      <button type="submit">Parser starten</button>
     </form>
-  </div>
+  </section>
 
   <div class="metrics">
     <article>
@@ -27,7 +32,34 @@
       <span>Verwerkt</span>
       <strong>{{ processed }}</strong>
     </article>
+    <article>
+      <span>Exportkolommen</span>
+      <strong>10</strong>
+    </article>
   </div>
+
+  <section class="pipeline-grid">
+    <article class="panel compact">
+      <span class="chip automatic">Automatisch</span>
+      <h3>1. Tekst uit PDF</h3>
+      <p>De eerste stap leest tekstlagen uit aangeleverde begrotingen. Bij scans is OCR nodig.</p>
+    </article>
+    <article class="panel compact">
+      <span class="chip automatic">Parser</span>
+      <h3>2. Regels herkennen</h3>
+      <p>Omschrijving, hoeveelheid, eenheid, eindprijs en totaal worden alvast uit tabelregels gehaald.</p>
+    </article>
+    <article class="panel compact">
+      <span class="chip manual">Controle</span>
+      <h3>3. Menselijke check</h3>
+      <p>Annemieke controleert ontbrekende kolommen zoals materiaal, materieel, O.A. en norm/arbeid.</p>
+    </article>
+    <article class="panel compact">
+      <span class="chip automatic">Export</span>
+      <h3>4. Excel</h3>
+      <p>Na controle wordt een Excel opgebouwd in de gewenste begrotingskolommen.</p>
+    </article>
+  </section>
 
   <section class="document-list">
     <div class="section-heading">
@@ -51,7 +83,10 @@
         {% endfor %}
       </div>
     {% else %}
-      <div class="empty-state">Nog geen stukken geupload.</div>
+      <div class="empty-state">
+        <strong>Nog geen stukken geupload</strong>
+        <span>Upload de eerste begrotings-PDF om de parser en Excel-export te testen.</span>
+      </div>
     {% endif %}
   </section>
 </section>

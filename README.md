@@ -64,6 +64,8 @@ CREATE DATABASE devalkadvies;
 3. OCR toevoegen voor gescande PDF's.
 4. Correcties opslaan zodat het systeem per leverancier slimmer wordt.
 
+Zie ook [docs/parser-aanpak.md](docs/parser-aanpak.md).
+
 ## Publiceren
 
 De GitHub Actions en Docker-publicatie staan klaar. Zie [docs/publish.md](docs/publish.md).

@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 
+{% block page_title %}Begroting controleren{% endblock %}
+
 {% block content %}
 <section class="detail-grid">
   <article class="panel">
@@ -30,6 +32,11 @@
           <span>Omschrijving</span>
           <span>Hvh</span>
           <span>Ehd</span>
+          <span>Norm</span>
+          <span>Uren</span>
+          <span>Materiaal</span>
+          <span>Materieel</span>
+          <span>O.A.</span>
           <span>Eenheidsprijs</span>
           <span>Totaal</span>
         </div>
@@ -38,6 +45,11 @@
             <span>{{ line.omschrijving_werkzaamheden }}</span>
             <span>{{ line.hoeveelheid or "" }}</span>
             <span>{{ line.eenheid or "" }}</span>
+            <span>{{ line.norm_arbeid or "" }}</span>
+            <span>{{ line.uren or "" }}</span>
+            <span>{{ line.materiaal or "" }}</span>
+            <span>{{ line.materieel or "" }}</span>
+            <span>{{ line.onderaannemer or "" }}</span>
             <span>{{ line.eenheidsprijs or "" }}</span>
             <span>{{ line.totaal_prijs_per_regel or "" }}</span>
           </div>
