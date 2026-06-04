@@ -2,6 +2,7 @@
 
 {% block page_title %}
   {% if active_page == "documents" %}Invoer
+  {% elif active_page == "consult" %}Raadplegen
   {% elif active_page == "relations" %}Relaties
   {% elif active_page == "projects" %}Projecten
   {% elif active_page == "server" %}Server overzicht
@@ -103,6 +104,58 @@
       <h3>4. Excel</h3>
       <p>Na controle wordt een Excel opgebouwd in de gewenste begrotingskolommen.</p>
     </article>
+  </section>
+  {% endif %}
+
+  {% if active_page == "consult" %}
+  <section class="consult-panel">
+    <div class="section-heading">
+      <div>
+        <span class="eyebrow">Database</span>
+        <h2>Raadplegen</h2>
+        <p>Zoek opgeslagen begrotingen terug op project, relatie, omschrijving, bron of documentdatum.</p>
+      </div>
+    </div>
+    <form action="/consult" method="get" class="consult-form">
+      <input name="q" value="{{ selected_query }}" placeholder="Zoek project, opdrachtgever, document of begrotingsregel">
+      <select name="status">
+        <option value="">Alle statussen</option>
+        <option value="needs_review" {% if selected_status == "needs_review" %}selected{% endif %}>Te controleren</option>
+        <option value="processed" {% if selected_status == "processed" %}selected{% endif %}>Verwerkt</option>
+        <option value="archived" {% if selected_status == "archived" %}selected{% endif %}>Archief</option>
+      </select>
+      <input name="date_from" type="date" value="{{ selected_date_from }}">
+      <input name="date_to" type="date" value="{{ selected_date_to }}">
+      <button type="submit">Zoeken</button>
+    </form>
+    <div class="consult-results">
+      {% if consult_documents %}
+        {% for document in consult_documents %}
+          <article class="consult-card">
+            <div>
+              <span class="eyebrow">{{ document.created_at.strftime("%d-%m-%Y") if document.created_at else "Geen datum" }}</span>
+              <h3><a href="/documents/{{ document.id }}">{{ document.project.name if document.project else document.project_name or "Geen project gekoppeld" }}</a></h3>
+              <p>{{ document.original_filename }}</p>
+            </div>
+            <div class="consult-meta">
+              <span><strong>{{ document.project.project_number if document.project and document.project.project_number else "-" }}</strong> projectnr</span>
+              <span><strong>{{ document.budget_lines|length }}</strong> regels</span>
+              <span><mark class="status {{ document.status }}">{{ document.status }}</mark></span>
+            </div>
+            <div class="consult-lines">
+              {% for line in document.budget_lines[:3] %}
+                <span>{{ line.omschrijving_werkzaamheden }}</span>
+              {% endfor %}
+            </div>
+          </article>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state">
+          <strong>Geen resultaten gevonden</strong>
+          <span>Pas je zoekterm, status of datumfilter aan.</span>
+        </div>
+      {% endif %}
+    </div>
   </section>
   {% endif %}
 

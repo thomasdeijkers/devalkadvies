@@ -9,8 +9,8 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Upload
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, select, text
-from sqlalchemy.orm import Session
+from sqlalchemy import func, or_, select, text
+from sqlalchemy.orm import Session, aliased
 
 from .config import settings
 from .database import create_db, engine, get_session
@@ -51,6 +51,26 @@ def documents_page(
     return _render_workspace(request, session, "documents", project, status)
 
 
+@app.get("/consult", response_class=HTMLResponse)
+def consult_page(
+    request: Request,
+    q: str | None = None,
+    status: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    return _render_workspace(
+        request,
+        session,
+        "consult",
+        status=status,
+        query=q,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+
 @app.get("/relations", response_class=HTMLResponse)
 def relations_page(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
     return _render_workspace(request, session, "relations")
@@ -72,6 +92,9 @@ def _render_workspace(
     active_page: str,
     project: str | None = None,
     status: str | None = None,
+    query: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> HTMLResponse:
     document_query = select(IncomingDocument)
     if project:
@@ -101,6 +124,7 @@ def _render_workspace(
         select(Relation).order_by(Relation.name)
     ).all()
     status_context = _status_context(session)
+    consult_documents = _consult_documents(session, query, status, date_from, date_to) if active_page == "consult" else []
 
     return templates.TemplateResponse(
         request=request,
@@ -117,7 +141,11 @@ def _render_workspace(
             "project_options": project_options,
             "relation_options": relation_options,
             "selected_project": project or "",
+            "selected_query": query or "",
             "selected_status": status or "",
+            "selected_date_from": date_from or "",
+            "selected_date_to": date_to or "",
+            "consult_documents": consult_documents,
             "active_page": active_page,
             **status_context,
         },
@@ -638,6 +666,63 @@ def _decimal_or_none(value: str) -> Decimal | None:
     try:
         return Decimal(cleaned)
     except InvalidOperation:
+        return None
+
+
+def _consult_documents(
+    session: Session,
+    query: str | None,
+    status: str | None,
+    date_from: str | None,
+    date_to: str | None,
+) -> list[IncomingDocument]:
+    client_relation = aliased(Relation)
+    architect_relation = aliased(Relation)
+    constructor_relation = aliased(Relation)
+    statement = (
+        select(IncomingDocument)
+        .outerjoin(IncomingDocument.project)
+        .outerjoin(client_relation, Project.client_relation_id == client_relation.id)
+        .outerjoin(architect_relation, Project.architect_relation_id == architect_relation.id)
+        .outerjoin(constructor_relation, Project.constructor_relation_id == constructor_relation.id)
+        .outerjoin(IncomingDocument.budget_lines)
+    )
+    cleaned_query = (query or "").strip()
+    if cleaned_query:
+        search = f"%{cleaned_query}%"
+        statement = statement.where(
+            or_(
+                IncomingDocument.original_filename.ilike(search),
+                IncomingDocument.project_name.ilike(search),
+                IncomingDocument.document_type.ilike(search),
+                IncomingDocument.source.ilike(search),
+                Project.name.ilike(search),
+                Project.project_number.ilike(search),
+                Project.location.ilike(search),
+                client_relation.name.ilike(search),
+                architect_relation.name.ilike(search),
+                constructor_relation.name.ilike(search),
+                BudgetLine.omschrijving_werkzaamheden.ilike(search),
+            )
+        )
+    if status:
+        statement = statement.where(IncomingDocument.status == status)
+    parsed_from = _date_or_none(date_from)
+    if parsed_from:
+        statement = statement.where(IncomingDocument.created_at >= parsed_from)
+    parsed_to = _date_or_none(date_to)
+    if parsed_to:
+        statement = statement.where(IncomingDocument.created_at < parsed_to + timedelta(days=1))
+
+    return session.scalars(statement.distinct().order_by(IncomingDocument.created_at.desc()).limit(80)).unique().all()
+
+
+def _date_or_none(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
         return None
 
 

@@ -436,6 +436,86 @@ button:hover {
   margin-top: 6px;
 }
 
+.consult-panel {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: linear-gradient(135deg, rgba(22, 55, 95, 0.94), rgba(14, 40, 72, 0.96));
+  box-shadow: var(--shadow);
+}
+
+.consult-form {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.7fr) minmax(160px, 0.7fr) 150px 150px 120px;
+  gap: 10px;
+}
+
+.consult-results {
+  display: grid;
+  gap: 10px;
+}
+
+.consult-card {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.25fr) minmax(260px, 0.9fr);
+  gap: 10px 16px;
+  padding: 14px;
+  border: 1px solid rgba(126, 169, 219, 0.22);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.consult-card h3 {
+  margin: 4px 0 5px;
+}
+
+.consult-card p {
+  margin: 0;
+  color: var(--soft);
+}
+
+.consult-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: flex-end;
+}
+
+.consult-meta span {
+  min-height: 30px;
+  padding: 6px 9px;
+  border: 1px solid rgba(126, 169, 219, 0.2);
+  border-radius: 6px;
+  color: var(--muted);
+  background: rgba(4, 19, 38, 0.45);
+  font-size: 12px;
+}
+
+.consult-meta strong {
+  color: #fff;
+}
+
+.consult-lines {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.consult-lines span {
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 5px 8px;
+  border-radius: 6px;
+  color: var(--soft);
+  background: rgba(77, 177, 201, 0.1);
+}
+
 .file-picker {
   position: relative;
   display: flex;
@@ -1087,8 +1167,14 @@ pre {
   .pipeline-grid,
   .data-grid,
   .input-overview,
+  .consult-form,
+  .consult-card,
   .server-grid {
     grid-template-columns: 1fr;
+  }
+
+  .consult-meta {
+    justify-content: flex-start;
   }
 }
 
