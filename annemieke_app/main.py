@@ -16,13 +16,17 @@ from .config import settings
 from .database import create_db, engine, get_session
 from .exporter import budget_document_to_xlsx, selected_budget_lines_to_xlsx
 from .index_provider import sync_price_index_series
+from .kengetallen import import_reference_lines
 from .models import (
+    AssessmentTemplate,
     BudgetLine,
     ExtractedField,
     IncomingDocument,
     OpenAIUsageEvent,
     PriceIndexSeries,
     Project,
+    ReferenceDataset,
+    ReferenceLine,
     Relation,
     ScheduledJob,
 )
@@ -97,6 +101,21 @@ def documents_page(
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     return _render_workspace(request, session, "documents", project, status)
+
+
+@app.get("/kengetallen", response_class=HTMLResponse)
+def reference_data_page(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
+    return _render_workspace(request, session, "kengetallen")
+
+
+@app.get("/beoordeling", response_class=HTMLResponse)
+def assessment_page(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
+    return _render_workspace(request, session, "beoordeling")
+
+
+@app.get("/templates", response_class=HTMLResponse)
+def templates_page(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
+    return _render_workspace(request, session, "templates")
 
 
 @app.get("/consult", response_class=HTMLResponse)
@@ -189,6 +208,13 @@ def _render_workspace(
     ).all()
     index_series = session.scalars(select(PriceIndexSeries).order_by(PriceIndexSeries.name)).all()
     scheduled_jobs = session.scalars(select(ScheduledJob).order_by(ScheduledJob.created_at.desc())).all()
+    reference_datasets = session.scalars(
+        select(ReferenceDataset).order_by(ReferenceDataset.created_at.desc()).limit(20)
+    ).all()
+    assessment_templates = session.scalars(
+        select(AssessmentTemplate).order_by(AssessmentTemplate.created_at.desc()).limit(20)
+    ).all()
+    reference_line_count = session.scalar(select(func.count(ReferenceLine.id))) or 0
     status_context = _status_context(session)
     consult_lines = _consult_lines(session, query, status, date_from, date_to, priced, min_score) if active_page == "consult" else []
 
@@ -208,6 +234,9 @@ def _render_workspace(
             "relation_options": relation_options,
             "index_series": index_series,
             "scheduled_jobs": scheduled_jobs,
+            "reference_datasets": reference_datasets,
+            "assessment_templates": assessment_templates,
+            "reference_line_count": reference_line_count,
             "selected_project": project or "",
             "selected_query": query or "",
             "selected_status": status or "",
@@ -292,6 +321,171 @@ async def upload_document(
     session.commit()
     _record_openai_usage(session, "budget_upload", document.id, parsed.openai_usage)
 
+    return RedirectResponse(f"/documents/{document.id}", status_code=303)
+
+
+@app.post("/kengetallen/upload")
+async def upload_reference_dataset(
+    name: str = Form(...),
+    source: str = Form(""),
+    notes: str = Form(""),
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in {".xlsx", ".xlsm"}:
+        raise HTTPException(status_code=400, detail="Upload een Excelbestand (.xlsx of .xlsm).")
+
+    settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    stored_filename = f"{uuid4().hex}{suffix}"
+    target_path = settings.upload_dir / stored_filename
+    target_path.write_bytes(await file.read())
+    imported_lines = import_reference_lines(target_path)
+
+    dataset = ReferenceDataset(
+        name=name.strip(),
+        source=source.strip() or None,
+        notes=notes.strip() or None,
+        original_filename=file.filename,
+        stored_filename=stored_filename,
+        status="active",
+    )
+    dataset.lines = [
+        ReferenceLine(
+            line_number=line.line_number,
+            project_name=line.project_name,
+            relation_name=line.relation_name,
+            document_date=line.document_date,
+            omschrijving_werkzaamheden=line.omschrijving_werkzaamheden,
+            hoeveelheid=line.hoeveelheid,
+            eenheid=line.eenheid,
+            norm_arbeid=line.norm_arbeid,
+            uren=line.uren,
+            materiaal=line.materiaal,
+            materieel=line.materieel,
+            onderaannemer=line.onderaannemer,
+            totaal_prijs_per_regel=line.totaal_prijs_per_regel,
+            eenheidsprijs=line.eenheidsprijs,
+            confidence=line.confidence,
+            raw_text=line.raw_text,
+        )
+        for line in imported_lines
+    ]
+    session.add(dataset)
+    session.commit()
+    return RedirectResponse("/kengetallen", status_code=303)
+
+
+@app.post("/templates")
+def create_assessment_template(
+    name: str = Form(...),
+    version: str = Form(""),
+    description: str = Form(""),
+    required_columns: str = Form(""),
+    output_filename: str = Form(""),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    default_columns = (
+        "omschrijving_werkzaamheden,hoeveelheid,eenheid,norm_arbeid,uren,materiaal,materieel,"
+        "onderaannemer,eenheidsprijs,totaal_prijs_per_regel"
+    )
+    session.add(
+        AssessmentTemplate(
+            name=name.strip(),
+            version=version.strip() or None,
+            description=description.strip() or None,
+            required_columns=required_columns.strip() or default_columns,
+            output_filename=output_filename.strip() or None,
+        )
+    )
+    session.commit()
+    return RedirectResponse("/templates", status_code=303)
+
+
+@app.post("/beoordeling/upload")
+async def upload_assessment_input(
+    project_name: str = Form(""),
+    project_id: str = Form(""),
+    template_id: str = Form(""),
+    reference_dataset_id: str = Form(""),
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in {".pdf", ".xlsx", ".xlsm"}:
+        raise HTTPException(status_code=400, detail="Upload een PDF of Excelbestand.")
+
+    settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    stored_filename = f"{uuid4().hex}{suffix}"
+    target_path = settings.upload_dir / stored_filename
+    target_path.write_bytes(await file.read())
+    selected_project = session.get(Project, _int_or_none(project_id)) if _int_or_none(project_id) else None
+
+    document = IncomingDocument(
+        original_filename=file.filename or "begroting",
+        stored_filename=stored_filename,
+        project_id=selected_project.id if selected_project else None,
+        project_name=project_name.strip() or None,
+        status="needs_review",
+        document_type="begroting_beoordeling",
+        source="excel" if suffix in {".xlsx", ".xlsm"} else "pdf",
+        parser_notes=_assessment_note(template_id, reference_dataset_id),
+    )
+    if suffix == ".pdf":
+        parsed = parse_pdf(target_path)
+        document.source = parsed.parse_method
+        document.parsed_text = parsed.text
+        document.parser_notes = f"{_assessment_note(template_id, reference_dataset_id)} | {_parser_note(parsed)}"
+        document.fields = [
+            ExtractedField(field_name=field.name, field_value=field.value, confidence=field.confidence)
+            for field in parsed.fields
+        ]
+        document.budget_lines = [
+            BudgetLine(
+                line_number=line.line_number,
+                omschrijving_werkzaamheden=line.omschrijving_werkzaamheden,
+                hoeveelheid=line.hoeveelheid,
+                eenheid=line.eenheid,
+                norm_arbeid=line.norm_arbeid,
+                uren=line.uren,
+                materiaal=line.materiaal,
+                materieel=line.materieel,
+                onderaannemer=line.onderaannemer,
+                totaal_prijs_per_regel=line.totaal_prijs_per_regel,
+                eenheidsprijs=line.eenheidsprijs,
+                confidence=line.confidence,
+                raw_text=line.raw_text,
+            )
+            for line in parsed.budget_lines
+        ]
+    else:
+        imported_lines = import_reference_lines(target_path)
+        document.parsed_text = "\n".join(line.raw_text for line in imported_lines[:500])
+        document.budget_lines = [
+            BudgetLine(
+                line_number=line.line_number,
+                omschrijving_werkzaamheden=line.omschrijving_werkzaamheden,
+                hoeveelheid=line.hoeveelheid,
+                eenheid=line.eenheid,
+                norm_arbeid=line.norm_arbeid,
+                uren=line.uren,
+                materiaal=line.materiaal,
+                materieel=line.materieel,
+                onderaannemer=line.onderaannemer,
+                totaal_prijs_per_regel=line.totaal_prijs_per_regel,
+                eenheidsprijs=line.eenheidsprijs,
+                confidence=line.confidence,
+                raw_text=line.raw_text,
+            )
+            for line in imported_lines
+        ]
+
+    for line in document.budget_lines:
+        _normalize_line_prices(line)
+    session.add(document)
+    session.commit()
+    if suffix == ".pdf":
+        _record_openai_usage(session, "assessment_upload", document.id, parsed.openai_usage)
     return RedirectResponse(f"/documents/{document.id}", status_code=303)
 
 
@@ -982,6 +1176,15 @@ def _parser_note(parsed) -> str | None:
         parts.append(f"OpenAI tokens: {parsed.openai_usage.get('total_tokens', 0)}")
     if parsed.notes:
         parts.append(parsed.notes)
+    return " | ".join(parts)
+
+
+def _assessment_note(template_id: str, reference_dataset_id: str) -> str:
+    parts = ["Module: begroting beoordeling"]
+    if template_id:
+        parts.append(f"template_id={template_id}")
+    if reference_dataset_id:
+        parts.append(f"kengetallen_dataset_id={reference_dataset_id}")
     return " | ".join(parts)
 
 

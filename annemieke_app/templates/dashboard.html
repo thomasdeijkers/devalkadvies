@@ -3,6 +3,9 @@
 {% block page_title %}
   {% if active_page == "documents" %}Invoer
   {% elif active_page == "consult" %}Raadplegen
+  {% elif active_page == "kengetallen" %}Kengetallen database
+  {% elif active_page == "beoordeling" %}Begroting beoordeling
+  {% elif active_page == "templates" %}Excel templates
   {% elif active_page == "relations" %}Relaties
   {% elif active_page == "projects" %}Projecten
   {% elif active_page == "indices" %}Indexering
@@ -105,6 +108,124 @@
       <span class="chip automatic">Export</span>
       <h3>4. Excel</h3>
       <p>Na controle wordt een Excel opgebouwd in de gewenste begrotingskolommen.</p>
+    </article>
+  </section>
+  {% endif %}
+
+  {% if active_page == "kengetallen" %}
+  <section class="module-grid">
+    <article class="panel data-form-panel">
+      <span class="chip automatic">Historische cijfers</span>
+      <h3>Kengetallenbestand uploaden</h3>
+      <p>Upload een Excelbestand met dezelfde basisvelden als de begrotingsregels. Deze regels vormen straks de referentiedatabase voor beoordeling.</p>
+      <form action="/kengetallen/upload" method="post" enctype="multipart/form-data" class="stack-form">
+        <input name="name" placeholder="Naam dataset, bv. Woningbouw 2024" required>
+        <input name="source" placeholder="Bron / leverancier / opdrachtgever">
+        <textarea name="notes" placeholder="Notities over peildatum, regio, projecttype of bijzonderheden"></textarea>
+        <label class="file-picker wide">
+          <input name="file" type="file" accept=".xlsx,.xlsm" required>
+          <span>Excel kengetallen kiezen</span>
+        </label>
+        <button type="submit">Kengetallen importeren</button>
+      </form>
+    </article>
+    <article class="panel card-list-panel">
+      <span class="chip manual">Database</span>
+      <h3>Beschikbare kengetallen</h3>
+      <div class="metric-strip">
+        <p><strong>{{ reference_datasets|length }}</strong><span>datasets</span></p>
+        <p><strong>{{ reference_line_count }}</strong><span>regels</span></p>
+      </div>
+      <div class="entity-grid">
+        {% for dataset in reference_datasets %}
+          <article class="entity-card">
+            <span class="entity-type">{{ dataset.status }}</span>
+            <strong>{{ dataset.name }}</strong>
+            <small>{{ dataset.lines|length }} regels · {{ dataset.original_filename or "handmatig" }}</small>
+          </article>
+        {% else %}
+          <p class="muted">Nog geen kengetallenbestand geupload.</p>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+  {% endif %}
+
+  {% if active_page == "beoordeling" %}
+  <section class="module-grid">
+    <article class="panel data-form-panel">
+      <span class="chip automatic">Nieuwe beoordeling</span>
+      <h3>Begroting beoordelen</h3>
+      <p>Upload straks een PDF of Excelbegroting. De regels worden naar hetzelfde templateveldmodel gebracht en kunnen daarna naast kengetallen worden gelegd.</p>
+      <form action="/beoordeling/upload" method="post" enctype="multipart/form-data" class="stack-form">
+        <select name="template_id">
+          <option value="">Standaard template</option>
+          {% for template in assessment_templates %}
+            <option value="{{ template.id }}">{{ template.name }}{% if template.version %} · {{ template.version }}{% endif %}</option>
+          {% endfor %}
+        </select>
+        <select name="reference_dataset_id">
+          <option value="">Nog geen kengetallen koppelen</option>
+          {% for dataset in reference_datasets %}
+            <option value="{{ dataset.id }}">{{ dataset.name }} · {{ dataset.lines|length }} regels</option>
+          {% endfor %}
+        </select>
+        <select name="project_id">
+          <option value="">Project later koppelen</option>
+          {% for project in project_options %}
+            <option value="{{ project.id }}">{{ project.project_number or "zonder nr" }} - {{ project.name }}</option>
+          {% endfor %}
+        </select>
+        <input name="project_name" placeholder="Projectnaam als het project nog niet bestaat">
+        <label class="file-picker wide">
+          <input name="file" type="file" accept=".pdf,.xlsx,.xlsm" required>
+          <span>Begroting kiezen</span>
+        </label>
+        <button type="submit">Beoordeling voorbereiden</button>
+      </form>
+    </article>
+    <article class="panel card-list-panel">
+      <span class="chip manual">Voorbereiding</span>
+      <h3>Beoordelingslogica</h3>
+      <div class="workflow-list">
+        <p><strong>1. Input normaliseren</strong><span>PDF/OCR/OpenAI of Excel naar dezelfde kolommen.</span></p>
+        <p><strong>2. Template invullen</strong><span>Omschrijving, hvh, ehd, norm, uren, materiaal, materieel, O.A., ehprijs en totaal.</span></p>
+        <p><strong>3. Referenties tonen</strong><span>Kengetallen naast de begrotingsregel voor validatie en bijsturing.</span></p>
+        <p><strong>4. Excel output</strong><span>Definitieve beoordeling exporteren in het gewenste format.</span></p>
+      </div>
+    </article>
+  </section>
+  {% endif %}
+
+  {% if active_page == "templates" %}
+  <section class="module-grid">
+    <article class="panel data-form-panel">
+      <span class="chip automatic">Excel structuur</span>
+      <h3>Template vastleggen</h3>
+      <p>Leg de kolommen en outputnaam vast. Later kunnen we hier echte Excel-templatebestanden en stylingregels aan koppelen.</p>
+      <form action="/templates" method="post" class="stack-form">
+        <input name="name" placeholder="Templatenaam" required>
+        <input name="version" placeholder="Versie, bv. 2026.1">
+        <input name="output_filename" placeholder="Output bestandsnaam">
+        <textarea name="required_columns" placeholder="Kolommen, komma-gescheiden"></textarea>
+        <textarea name="description" placeholder="Omschrijving / afspraken voor beoordeling"></textarea>
+        <button type="submit">Template opslaan</button>
+      </form>
+    </article>
+    <article class="panel card-list-panel">
+      <span class="chip manual">Beschikbaar</span>
+      <h3>Templates</h3>
+      <div class="entity-grid">
+        {% for template in assessment_templates %}
+          <article class="entity-card">
+            <span class="entity-type">{{ template.status }}</span>
+            <strong>{{ template.name }}</strong>
+            <small>{{ template.version or "geen versie" }}</small>
+          </article>
+        {% else %}
+          <p class="muted">Nog geen templates vastgelegd.</p>
+        {% endfor %}
+      </div>
     </article>
   </section>
   {% endif %}

@@ -131,6 +131,67 @@ class BudgetLine(Base):
     price_index_series: Mapped["PriceIndexSeries | None"] = relationship(back_populates="budget_lines")
 
 
+class ReferenceDataset(Base):
+    __tablename__ = "reference_datasets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(180), nullable=False, index=True)
+    original_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    stored_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    status: Mapped[str] = mapped_column(String(40), default="active", index=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    lines: Mapped[list["ReferenceLine"]] = relationship(
+        back_populates="dataset",
+        cascade="all, delete-orphan",
+        order_by="ReferenceLine.line_number",
+    )
+
+
+class ReferenceLine(Base):
+    __tablename__ = "reference_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    dataset_id: Mapped[int] = mapped_column(ForeignKey("reference_datasets.id"), index=True)
+    line_number: Mapped[int] = mapped_column(Integer, default=0)
+    project_name: Mapped[str | None] = mapped_column(String(180), nullable=True, index=True)
+    relation_name: Mapped[str | None] = mapped_column(String(180), nullable=True, index=True)
+    document_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    omschrijving_werkzaamheden: Mapped[str] = mapped_column(Text, default="")
+    hoeveelheid: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    eenheid: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    norm_arbeid: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    uren: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    materiaal: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    materieel: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    onderaannemer: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    totaal_prijs_per_regel: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    eenheidsprijs: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    confidence: Mapped[int] = mapped_column(Integer, default=100)
+    raw_text: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    dataset: Mapped[ReferenceDataset] = relationship(back_populates="lines")
+
+
+class AssessmentTemplate(Base):
+    __tablename__ = "assessment_templates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(180), nullable=False, index=True)
+    version: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    required_columns: Mapped[str] = mapped_column(
+        Text,
+        default="omschrijving_werkzaamheden,hoeveelheid,eenheid,norm_arbeid,uren,materiaal,materieel,onderaannemer,eenheidsprijs,totaal_prijs_per_regel",
+    )
+    output_filename: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    status: Mapped[str] = mapped_column(String(40), default="active", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class PriceIndexSeries(Base):
     __tablename__ = "price_index_series"
 
