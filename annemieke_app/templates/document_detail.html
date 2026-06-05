@@ -126,6 +126,15 @@
         <span>De regels verschijnen automatisch zodra de parser klaar is.</span>
       </div>
     {% elif document.budget_lines %}
+      {% if normalization_suggestions %}
+        <div class="normalization-strip">
+          <strong>Normalisatievoorstellen</strong>
+          {% for line in normalization_suggestions %}
+            <span>{{ line.normalization_candidate }} <small>{{ line.normalization_score }}%</small></span>
+          {% endfor %}
+          <a class="mini-button" href="/normalisatie">Beheren</a>
+        </div>
+      {% endif %}
       <form action="/documents/{{ document.id }}/budget-lines/bulk" method="post" class="budget-edit-form">
         <div class="budget-actions">
           <span>{{ document.budget_lines|length }} regels gevonden</span>
@@ -163,7 +172,12 @@
             <input name="onderaannemer" value="{{ line.onderaannemer or '' }}">
             <input name="eenheidsprijs" value="{{ line|unit_price|amount }}">
             <input name="totaal_prijs_per_regel" value="{{ line.totaal_prijs_per_regel or '' }}">
-            <span class="confidence-badge {% if line.confidence < 60 %}low{% elif line.confidence < 80 %}mid{% else %}high{% endif %}">{{ line.confidence }}%</span>
+            <span class="line-score">
+              <mark class="confidence-badge {% if line.confidence < 60 %}low{% elif line.confidence < 80 %}mid{% else %}high{% endif %}">{{ line.confidence }}%</mark>
+              {% if line.normalization_candidate %}
+                <small title="{{ line.normalization_candidate }}">N {{ line.normalization_score }}%</small>
+              {% endif %}
+            </span>
             <label class="delete-check" title="Deze regel verwijderen bij opslaan">
               <input type="checkbox" name="delete_line_id" value="{{ line.id }}">
             </label>

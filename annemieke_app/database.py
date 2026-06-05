@@ -63,6 +63,11 @@ def _apply_lightweight_migrations() -> None:
                 "ALTER TABLE budget_lines ADD COLUMN indexed_totaal_prijs_per_regel NUMERIC(14, 2)"
             ),
             "bron_pagina": "ALTER TABLE budget_lines ADD COLUMN bron_pagina INTEGER",
+            "normalized_key": "ALTER TABLE budget_lines ADD COLUMN normalized_key VARCHAR(180)",
+            "normalized_omschrijving": "ALTER TABLE budget_lines ADD COLUMN normalized_omschrijving TEXT",
+            "normalization_method": "ALTER TABLE budget_lines ADD COLUMN normalization_method VARCHAR(40)",
+            "normalization_score": "ALTER TABLE budget_lines ADD COLUMN normalization_score INTEGER DEFAULT 0",
+            "normalization_candidate": "ALTER TABLE budget_lines ADD COLUMN normalization_candidate TEXT",
         }
         for column_name, statement in budget_line_migrations.items():
             if column_name not in budget_line_columns:
@@ -78,6 +83,11 @@ def _apply_lightweight_migrations() -> None:
             "hoofdstuk_omschrijving": "ALTER TABLE reference_lines ADD COLUMN hoofdstuk_omschrijving TEXT",
             "post_code": "ALTER TABLE reference_lines ADD COLUMN post_code VARCHAR(80)",
             "bron_pagina": "ALTER TABLE reference_lines ADD COLUMN bron_pagina INTEGER",
+            "normalized_key": "ALTER TABLE reference_lines ADD COLUMN normalized_key VARCHAR(180)",
+            "normalized_omschrijving": "ALTER TABLE reference_lines ADD COLUMN normalized_omschrijving TEXT",
+            "normalization_method": "ALTER TABLE reference_lines ADD COLUMN normalization_method VARCHAR(40)",
+            "normalization_score": "ALTER TABLE reference_lines ADD COLUMN normalization_score INTEGER DEFAULT 0",
+            "normalization_candidate": "ALTER TABLE reference_lines ADD COLUMN normalization_candidate TEXT",
         }
         for column_name, statement in reference_line_migrations.items():
             if column_name not in reference_line_columns:

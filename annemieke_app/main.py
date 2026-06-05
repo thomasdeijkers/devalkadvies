@@ -22,6 +22,7 @@ from .models import (
     BudgetLine,
     ExtractedField,
     IncomingDocument,
+    NormalizationTerm,
     OpenAIUsageEvent,
     PriceIndexSeries,
     Project,
@@ -29,6 +30,13 @@ from .models import (
     ReferenceLine,
     Relation,
     ScheduledJob,
+)
+from .normalizer import (
+    apply_normalization,
+    is_noise_line,
+    normalization_key,
+    seed_default_normalization_terms,
+    split_aliases,
 )
 from .parser import parse_pdf
 from .template_exporter import fill_screening_template
@@ -82,6 +90,8 @@ templates.env.filters["unit_price"] = calculated_unit_price
 @app.on_event("startup")
 def startup() -> None:
     create_db()
+    with SessionLocal() as session:
+        seed_default_normalization_terms(session)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -105,8 +115,12 @@ def documents_page(
 
 
 @app.get("/kengetallen", response_class=HTMLResponse)
-def reference_data_page(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
-    return _render_workspace(request, session, "kengetallen")
+def reference_data_page(
+    request: Request,
+    q: str | None = None,
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    return _render_workspace(request, session, "kengetallen", query=q)
 
 
 @app.get("/beoordeling", response_class=HTMLResponse)
@@ -168,6 +182,11 @@ def jobs_page(request: Request, session: Session = Depends(get_session)) -> HTML
     return _render_workspace(request, session, "jobs")
 
 
+@app.get("/normalisatie", response_class=HTMLResponse)
+def normalization_page(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
+    return _render_workspace(request, session, "normalisatie")
+
+
 def _render_workspace(
     request: Request,
     session: Session,
@@ -216,6 +235,24 @@ def _render_workspace(
         select(AssessmentTemplate).order_by(AssessmentTemplate.created_at.desc()).limit(20)
     ).all()
     reference_line_count = session.scalar(select(func.count(ReferenceLine.id))) or 0
+    reference_lines = _reference_lines(session, query) if active_page == "kengetallen" else []
+    assessment_documents = session.scalars(
+        select(IncomingDocument)
+        .where(IncomingDocument.document_type == "begroting_beoordeling")
+        .order_by(IncomingDocument.created_at.desc())
+        .limit(30)
+    ).all()
+    normalization_terms = session.scalars(
+        select(NormalizationTerm).order_by(NormalizationTerm.canonical_label, NormalizationTerm.alias).limit(200)
+    ).all()
+    normalization_candidates = session.scalars(
+        select(BudgetLine)
+        .where(BudgetLine.normalization_candidate.is_not(None))
+        .where(BudgetLine.normalization_score < 100)
+        .order_by(BudgetLine.id.desc())
+        .limit(40)
+    ).all()
+    normalization_stats = _normalization_stats(session)
     status_context = _status_context(session)
     consult_lines = _consult_lines(session, query, status, date_from, date_to, priced, min_score) if active_page == "consult" else []
 
@@ -236,8 +273,13 @@ def _render_workspace(
             "index_series": index_series,
             "scheduled_jobs": scheduled_jobs,
             "reference_datasets": reference_datasets,
+            "reference_lines": reference_lines,
             "assessment_templates": assessment_templates,
+            "assessment_documents": assessment_documents,
             "reference_line_count": reference_line_count,
+            "normalization_terms": normalization_terms,
+            "normalization_candidates": normalization_candidates,
+            "normalization_stats": normalization_stats,
             "selected_project": project or "",
             "selected_query": query or "",
             "selected_status": status or "",
@@ -357,7 +399,9 @@ async def upload_reference_dataset(
             raw_text=line.raw_text,
         )
         for line in imported_lines
+        if not is_noise_line(line.omschrijving_werkzaamheden)
     ]
+    apply_normalization(session, dataset.lines)
     session.add(dataset)
     session.commit()
     return RedirectResponse("/kengetallen", status_code=303)
@@ -403,6 +447,76 @@ async def create_assessment_template(
     )
     session.commit()
     return RedirectResponse("/templates", status_code=303)
+
+
+@app.post("/kengetallen/{dataset_id}/delete")
+def delete_reference_dataset(dataset_id: int, session: Session = Depends(get_session)) -> RedirectResponse:
+    dataset = session.get(ReferenceDataset, dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="Kengetallendataset niet gevonden.")
+
+    file_path = settings.upload_dir / dataset.stored_filename if dataset.stored_filename else None
+    session.delete(dataset)
+    session.commit()
+    if file_path and file_path.exists():
+        file_path.unlink()
+    return RedirectResponse("/kengetallen", status_code=303)
+
+
+@app.post("/normalisatie/terms")
+def create_normalization_term(
+    canonical_label: str = Form(...),
+    aliases: str = Form(""),
+    category: str = Form("omschrijving"),
+    match_type: str = Form("fuzzy"),
+    min_score: str = Form("82"),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    label = canonical_label.strip()
+    if not label:
+        raise HTTPException(status_code=400, detail="Vul een standaardomschrijving in.")
+    term_type = match_type if match_type in {"hard", "fuzzy"} else "fuzzy"
+    score = max(50, min(100, _int_or_none(min_score) or 82))
+    alias_values = split_aliases(aliases) or [label]
+    canonical_key = normalization_key(label) or label.lower().replace(" ", "_")[:180]
+    for alias in alias_values:
+        session.add(
+            NormalizationTerm(
+                canonical_key=canonical_key,
+                canonical_label=label,
+                alias=alias,
+                category=category.strip() or "omschrijving",
+                match_type=term_type,
+                min_score=score,
+                active=1,
+            )
+        )
+    session.commit()
+    return RedirectResponse("/normalisatie", status_code=303)
+
+
+@app.post("/normalisatie/terms/{term_id}/delete")
+def delete_normalization_term(term_id: int, session: Session = Depends(get_session)) -> RedirectResponse:
+    term = session.get(NormalizationTerm, term_id)
+    if term is None:
+        raise HTTPException(status_code=404, detail="Normalisatieterm niet gevonden.")
+    session.delete(term)
+    session.commit()
+    return RedirectResponse("/normalisatie", status_code=303)
+
+
+@app.post("/normalisatie/apply")
+def apply_normalization_to_existing(session: Session = Depends(get_session)) -> RedirectResponse:
+    reference_lines = session.scalars(select(ReferenceLine)).all()
+    apply_normalization(session, reference_lines)
+    session.flush()
+
+    budget_lines = session.scalars(select(BudgetLine)).all()
+    for line in budget_lines:
+        _normalize_line_prices(line)
+    apply_normalization(session, budget_lines)
+    session.commit()
+    return RedirectResponse("/normalisatie", status_code=303)
 
 
 @app.post("/beoordeling/upload")
@@ -472,10 +586,12 @@ async def upload_assessment_input(
                 raw_text=line.raw_text,
             )
             for line in imported_lines
+            if not is_noise_line(line.omschrijving_werkzaamheden)
         ]
 
     for line in document.budget_lines:
         _normalize_line_prices(line)
+    apply_normalization(session, document.budget_lines)
     session.add(document)
     session.commit()
     return RedirectResponse(f"/documents/{document.id}", status_code=303)
@@ -716,6 +832,9 @@ def document_detail(
             "document": document,
             "project_options": session.scalars(select(Project).order_by(Project.name)).all(),
             "relation_options": session.scalars(select(Relation).order_by(Relation.name)).all(),
+            "normalization_suggestions": [
+                line for line in document.budget_lines if line.normalization_candidate and line.normalization_score < 100
+            ][:12],
             **_status_context(session),
         },
     )
@@ -776,6 +895,7 @@ def add_field(
 def update_status(
     document_id: int,
     status: str = Form(...),
+    return_to: str = Form(""),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
     document = session.get(IncomingDocument, document_id)
@@ -786,12 +906,14 @@ def update_status(
 
     document.status = status
     session.commit()
-    return RedirectResponse(request_url_for_document(document.id, archived=status == "archived"), status_code=303)
+    target = _safe_return(return_to) or request_url_for_document(document.id, archived=status == "archived")
+    return RedirectResponse(target, status_code=303)
 
 
 @app.post("/documents/{document_id}/delete")
 def delete_document(
     document_id: int,
+    return_to: str = Form(""),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
     document = session.get(IncomingDocument, document_id)
@@ -803,7 +925,7 @@ def delete_document(
     session.commit()
     if file_path.exists():
         file_path.unlink()
-    return RedirectResponse("/", status_code=303)
+    return RedirectResponse(_safe_return(return_to) or "/", status_code=303)
 
 
 @app.post("/documents/{document_id}/lines/{line_id}")
@@ -838,6 +960,7 @@ def update_budget_line(
     line.totaal_prijs_per_regel = _decimal_or_none(totaal_prijs_per_regel)
     _normalize_line_prices(line)
     line.confidence = 100
+    apply_normalization(session, [line])
     session.commit()
     return RedirectResponse(f"/documents/{document_id}", status_code=303)
 
@@ -880,6 +1003,7 @@ async def update_budget_lines_bulk(
         line.totaal_prijs_per_regel = _decimal_or_none(_form_value(form, "totaal_prijs_per_regel", index))
         _normalize_line_prices(line)
         line.confidence = 100
+        apply_normalization(session, [line])
 
     action = str(form.get("action") or "save")
     if action == "validate":
@@ -929,6 +1053,7 @@ def add_budget_line(
         )
     )
     _normalize_line_prices(line)
+    apply_normalization(session, [line])
     session.commit()
     return RedirectResponse(f"/documents/{document.id}", status_code=303)
 
@@ -1103,6 +1228,9 @@ def _consult_lines(
                 architect_relation.name.ilike(search),
                 constructor_relation.name.ilike(search),
                 BudgetLine.omschrijving_werkzaamheden.ilike(search),
+                BudgetLine.normalized_omschrijving.ilike(search),
+                BudgetLine.normalized_key.ilike(search),
+                BudgetLine.normalization_candidate.ilike(search),
                 BudgetLine.eenheid.ilike(search),
             )
         )
@@ -1134,6 +1262,51 @@ def _consult_lines(
     ).unique().all()
 
 
+def _reference_lines(session: Session, query: str | None, limit: int = 300) -> list[ReferenceLine]:
+    statement = select(ReferenceLine).join(ReferenceLine.dataset)
+    cleaned_query = (query or "").strip()
+    if cleaned_query:
+        search = f"%{cleaned_query}%"
+        statement = statement.where(
+            or_(
+                ReferenceDataset.name.ilike(search),
+                ReferenceDataset.source.ilike(search),
+                ReferenceLine.project_name.ilike(search),
+                ReferenceLine.relation_name.ilike(search),
+                ReferenceLine.omschrijving_werkzaamheden.ilike(search),
+                ReferenceLine.normalized_omschrijving.ilike(search),
+                ReferenceLine.normalized_key.ilike(search),
+                ReferenceLine.eenheid.ilike(search),
+            )
+        )
+    return session.scalars(
+        statement.order_by(ReferenceDataset.created_at.desc(), ReferenceLine.line_number).limit(limit)
+    ).unique().all()
+
+
+def _normalization_stats(session: Session) -> dict[str, int]:
+    budget_total = session.scalar(select(func.count(BudgetLine.id))) or 0
+    reference_total = session.scalar(select(func.count(ReferenceLine.id))) or 0
+    term_count = session.scalar(select(func.count(NormalizationTerm.id))) or 0
+    suggestions = session.scalar(
+        select(func.count(BudgetLine.id)).where(BudgetLine.normalization_candidate.is_not(None))
+    ) or 0
+    hard_matches = session.scalar(
+        select(func.count(BudgetLine.id)).where(BudgetLine.normalization_method == "hard")
+    ) or 0
+    fuzzy_matches = session.scalar(
+        select(func.count(BudgetLine.id)).where(BudgetLine.normalization_method.in_(["fuzzy", "reference"]))
+    ) or 0
+    return {
+        "budget_total": int(budget_total),
+        "reference_total": int(reference_total),
+        "term_count": int(term_count),
+        "suggestions": int(suggestions),
+        "hard_matches": int(hard_matches),
+        "fuzzy_matches": int(fuzzy_matches),
+    }
+
+
 def _parse_document_background(document_id: int, usage_source: str, force_openai: bool = False) -> None:
     session = SessionLocal()
     try:
@@ -1161,9 +1334,14 @@ def _parse_document_background(document_id: int, usage_source: str, force_openai
             for field in parsed.fields
         ]
         _set_parse_progress(session, document, 88, "Begrotingsregels opslaan")
-        document.budget_lines = [_budget_line_from_parsed(line) for line in parsed.budget_lines]
+        document.budget_lines = [
+            _budget_line_from_parsed(line)
+            for line in parsed.budget_lines
+            if not is_noise_line(line.omschrijving_werkzaamheden)
+        ]
         for line in document.budget_lines:
             _normalize_line_prices(line)
+        apply_normalization(session, document.budget_lines)
         document.status = "needs_review"
         document.parser_stage = "Klaar voor controle"
         document.parser_progress = 100
@@ -1298,6 +1476,15 @@ def _int_or_none(value: str | int | None) -> int | None:
 
 def request_url_for_document(document_id: int, archived: bool = False) -> str:
     return "/" if archived else f"/documents/{document_id}"
+
+
+def _safe_return(value: str | None) -> str | None:
+    if not value:
+        return None
+    cleaned = value.strip()
+    if cleaned.startswith("/") and not cleaned.startswith("//"):
+        return cleaned
+    return None
 
 
 def _parser_note(parsed) -> str | None:

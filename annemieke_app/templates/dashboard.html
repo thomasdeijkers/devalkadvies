@@ -6,6 +6,7 @@
   {% elif active_page == "kengetallen" %}Kengetallen database
   {% elif active_page == "beoordeling" %}Begroting beoordeling
   {% elif active_page == "templates" %}Excel templates
+  {% elif active_page == "normalisatie" %}Normalisatie
   {% elif active_page == "relations" %}Relaties
   {% elif active_page == "projects" %}Projecten
   {% elif active_page == "indices" %}Indexering
@@ -136,18 +137,70 @@
         <p><strong>{{ reference_datasets|length }}</strong><span>datasets</span></p>
         <p><strong>{{ reference_line_count }}</strong><span>regels</span></p>
       </div>
-      <div class="entity-grid">
+      <div class="entity-list">
         {% for dataset in reference_datasets %}
-          <article class="entity-card">
-            <span class="entity-type">{{ dataset.status }}</span>
-            <strong>{{ dataset.name }}</strong>
-            <small>{{ dataset.lines|length }} regels · {{ dataset.original_filename or "handmatig" }}</small>
+          <article class="entity-row">
+            <div>
+              <span class="entity-type">{{ dataset.status }}</span>
+              <strong>{{ dataset.name }}</strong>
+              <small>{{ dataset.lines|length }} regels - {{ dataset.original_filename or "handmatig" }}</small>
+            </div>
+            <form action="/kengetallen/{{ dataset.id }}/delete" method="post" onsubmit="return confirm('Deze kengetallendataset verwijderen?');">
+              <button class="mini-button danger" type="submit">Verwijderen</button>
+            </form>
           </article>
         {% else %}
           <p class="muted">Nog geen kengetallenbestand geupload.</p>
         {% endfor %}
       </div>
     </article>
+  </section>
+  <section class="panel reference-search-panel">
+    <div class="section-heading">
+      <div>
+        <span class="eyebrow">Referentieregels</span>
+        <h2>Zoeken in kengetallen</h2>
+        <p>Zoek op dataset, project, relatie, omschrijving, eenheid of genormaliseerde term.</p>
+      </div>
+      <form action="/kengetallen" method="get" class="filter-form">
+        <input name="q" value="{{ selected_query }}" placeholder="Zoek kengetal">
+        <button type="submit">Zoeken</button>
+      </form>
+    </div>
+    <div class="reference-table">
+      {% if reference_lines %}
+        <div class="reference-row reference-head">
+          <span>Dataset</span>
+          <span>Project</span>
+          <span>Relatie</span>
+          <span>Omschrijving</span>
+          <span>Hvh</span>
+          <span>Ehd</span>
+          <span>Ehprijs</span>
+          <span>Normaalvorm</span>
+        </div>
+        {% for line in reference_lines %}
+          <div class="reference-row">
+            <span><strong>{{ line.dataset.name }}</strong><small>{{ line.dataset.source or line.dataset.original_filename or "" }}</small></span>
+            <span>{{ line.project_name or "-" }}</span>
+            <span>{{ line.relation_name or "-" }}</span>
+            <span>{{ line.omschrijving_werkzaamheden }}</span>
+            <span>{{ line.hoeveelheid|amount }}</span>
+            <span>{{ line.eenheid or "" }}</span>
+            <span>{{ line|unit_price|euro }}</span>
+            <span>
+              {{ line.normalized_omschrijving or "-" }}
+              {% if line.normalization_method %}<small>{{ line.normalization_method }} - {{ line.normalization_score }}%</small>{% endif %}
+            </span>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state">
+          <strong>Geen kengetallenregels gevonden</strong>
+          <span>Upload een bestand of pas je zoekterm aan.</span>
+        </div>
+      {% endif %}
+    </div>
   </section>
   {% endif %}
 
@@ -161,13 +214,13 @@
         <select name="template_id">
           <option value="">Standaard template</option>
           {% for template in assessment_templates %}
-            <option value="{{ template.id }}">{{ template.name }}{% if template.version %} · {{ template.version }}{% endif %}</option>
+            <option value="{{ template.id }}">{{ template.name }}{% if template.version %} - {{ template.version }}{% endif %}</option>
           {% endfor %}
         </select>
         <select name="reference_dataset_id">
           <option value="">Nog geen kengetallen koppelen</option>
           {% for dataset in reference_datasets %}
-            <option value="{{ dataset.id }}">{{ dataset.name }} · {{ dataset.lines|length }} regels</option>
+            <option value="{{ dataset.id }}">{{ dataset.name }} - {{ dataset.lines|length }} regels</option>
           {% endfor %}
         </select>
         <select name="project_id">
@@ -192,6 +245,144 @@
         <p><strong>2. Template invullen</strong><span>Omschrijving, hvh, ehd, norm, uren, materiaal, materieel, O.A., ehprijs en totaal.</span></p>
         <p><strong>3. Referenties tonen</strong><span>Kengetallen naast de begrotingsregel voor validatie en bijsturing.</span></p>
         <p><strong>4. Excel output</strong><span>Definitieve beoordeling exporteren in het gewenste format.</span></p>
+      </div>
+    </article>
+  </section>
+  <section class="panel assessment-history">
+    <div class="section-heading">
+      <div>
+        <span class="eyebrow">Beoordelingen</span>
+        <h2>Ingevoerde beoordelingen</h2>
+        <p>Alle ingevoerde beoordelingsstukken, inclusief PDF- en Excel-input.</p>
+      </div>
+    </div>
+    {% if assessment_documents %}
+      <div class="table assessment-table">
+        <div class="table-row table-head">
+          <span>Project</span>
+          <span>Bestand</span>
+          <span>Status</span>
+          <span>Regels</span>
+          <span>Datum</span>
+          <span>Acties</span>
+        </div>
+        {% for document in assessment_documents %}
+          <div class="table-row">
+            <span>{{ document.project.name if document.project else document.project_name or "Geen project" }}</span>
+            <a class="file-link" href="/documents/{{ document.id }}">{{ document.original_filename }}</a>
+            <span><mark class="status {{ document.status }}">{{ document.status }}</mark></span>
+            <span>{{ document.budget_lines|length }}</span>
+            <span>{{ document.created_at.strftime("%d-%m-%Y %H:%M") if document.created_at else "" }}</span>
+            <span class="row-actions">
+              {% if document.status == "archived" %}
+                <form action="/documents/{{ document.id }}/status" method="post">
+                  <input type="hidden" name="return_to" value="/beoordeling">
+                  <button class="mini-button" name="status" value="needs_review" type="submit">Terugzetten</button>
+                </form>
+              {% else %}
+                <form action="/documents/{{ document.id }}/status" method="post">
+                  <input type="hidden" name="return_to" value="/beoordeling">
+                  <button class="mini-button" name="status" value="archived" type="submit">Archiveren</button>
+                </form>
+              {% endif %}
+              <form action="/documents/{{ document.id }}/delete" method="post" onsubmit="return confirm('Deze beoordeling definitief verwijderen?');">
+                <input type="hidden" name="return_to" value="/beoordeling">
+                <button class="mini-button danger" type="submit">Verwijderen</button>
+              </form>
+            </span>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">
+        <strong>Nog geen beoordelingen ingevoerd</strong>
+        <span>Upload een PDF of Excelbegroting om de eerste beoordeling aan te maken.</span>
+      </div>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if active_page == "normalisatie" %}
+  <section class="module-grid">
+    <article class="panel data-form-panel">
+      <span class="chip automatic">Lerende laag</span>
+      <h3>Synoniem of standaardterm toevoegen</h3>
+      <p>Gebruik harde termen voor vaste basisbegrippen. Gebruik fuzzy voor omschrijvingen die op elkaar lijken maar niet exact gelijk zijn.</p>
+      <form action="/normalisatie/terms" method="post" class="stack-form">
+        <input name="canonical_label" placeholder="Standaardomschrijving, bv. Maatvoering" required>
+        <textarea name="aliases" placeholder="Synoniemen, een per regel. Bijvoorbeeld: hoofdmaatvoering&#10;controle maatvoering"></textarea>
+        <select name="match_type">
+          <option value="hard">Hard matchen</option>
+          <option value="fuzzy">Fuzzy voorstel</option>
+        </select>
+        <input name="category" value="omschrijving" placeholder="Categorie">
+        <input name="min_score" value="82" placeholder="Minimale score">
+        <button type="submit">Term opslaan</button>
+      </form>
+    </article>
+    <article class="panel">
+      <span class="chip manual">Status</span>
+      <h3>Normalisatie overzicht</h3>
+      <div class="metric-strip">
+        <p><strong>{{ normalization_stats.term_count }}</strong><span>termen</span></p>
+        <p><strong>{{ normalization_stats.suggestions }}</strong><span>voorstellen</span></p>
+        <p><strong>{{ normalization_stats.hard_matches }}</strong><span>harde matches</span></p>
+        <p><strong>{{ normalization_stats.fuzzy_matches }}</strong><span>fuzzy/reference</span></p>
+      </div>
+      <form action="/normalisatie/apply" method="post" class="stack-form">
+        <button type="submit">Alle regels opnieuw normaliseren</button>
+      </form>
+    </article>
+  </section>
+
+  <section class="data-grid normalization-grid">
+    <article class="panel">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Basiswoordenboek</span>
+          <h2>Vaste termen en synoniemen</h2>
+        </div>
+      </div>
+      <div class="entity-list">
+        {% for term in normalization_terms %}
+          <article class="entity-row">
+            <div>
+              <span class="entity-type">{{ term.match_type }} - {{ term.min_score }}%</span>
+              <strong>{{ term.canonical_label }}</strong>
+              <small>{{ term.alias }} - {{ term.category }}</small>
+            </div>
+            <form action="/normalisatie/terms/{{ term.id }}/delete" method="post" onsubmit="return confirm('Deze normalisatieterm verwijderen?');">
+              <button class="mini-button danger" type="submit">Verwijderen</button>
+            </form>
+          </article>
+        {% else %}
+          <p class="muted">Nog geen normalisatietermen toegevoegd.</p>
+        {% endfor %}
+      </div>
+    </article>
+    <article class="panel">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Voorstellen</span>
+          <h2>Fuzzy matches om te beoordelen</h2>
+          <p>Deze regels lijken op een standaardterm of kengetal, maar zijn nog geen harde match.</p>
+        </div>
+      </div>
+      <div class="entity-list">
+        {% for line in normalization_candidates %}
+          <article class="entity-row">
+            <div>
+              <span class="entity-type">{{ line.normalization_method }} - {{ line.normalization_score }}%</span>
+              <strong>{{ line.normalization_candidate }}</strong>
+              <small>{{ line.omschrijving_werkzaamheden }}{% if line.document %} - {{ line.document.original_filename }}{% endif %}</small>
+            </div>
+            {% if line.document %}
+              <a class="mini-button" href="/documents/{{ line.document.id }}">Openen</a>
+            {% endif %}
+          </article>
+        {% else %}
+          <p class="muted">Nog geen fuzzy voorstellen. Upload of normaliseer eerst data.</p>
+        {% endfor %}
       </div>
     </article>
   </section>
@@ -609,14 +800,17 @@
             <span class="row-actions">
               {% if document.status == "archived" %}
                 <form action="/documents/{{ document.id }}/status" method="post">
+                  <input type="hidden" name="return_to" value="{% if active_page == 'documents' %}/documents{% else %}/{% endif %}">
                   <button class="mini-button" name="status" value="needs_review" type="submit">Terugzetten</button>
                 </form>
               {% else %}
                 <form action="/documents/{{ document.id }}/status" method="post">
+                  <input type="hidden" name="return_to" value="{% if active_page == 'documents' %}/documents{% else %}/{% endif %}">
                   <button class="mini-button" name="status" value="archived" type="submit">Archiveren</button>
                 </form>
               {% endif %}
               <form action="/documents/{{ document.id }}/delete" method="post" onsubmit="return confirm('Dit stuk definitief verwijderen?');">
+                <input type="hidden" name="return_to" value="{% if active_page == 'documents' %}/documents{% else %}/{% endif %}">
                 <button class="mini-button danger" type="submit">Verwijderen</button>
               </form>
             </span>

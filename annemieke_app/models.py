@@ -132,6 +132,11 @@ class BudgetLine(Base):
     indexed_eenheidsprijs: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     indexed_totaal_prijs_per_regel: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     bron_pagina: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    normalized_key: Mapped[str | None] = mapped_column(String(180), nullable=True, index=True)
+    normalized_omschrijving: Mapped[str | None] = mapped_column(Text, nullable=True)
+    normalization_method: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    normalization_score: Mapped[int] = mapped_column(Integer, default=0)
+    normalization_candidate: Mapped[str | None] = mapped_column(Text, nullable=True)
     confidence: Mapped[int] = mapped_column(Integer, default=50)
     raw_text: Mapped[str] = mapped_column(Text, default="")
 
@@ -183,11 +188,30 @@ class ReferenceLine(Base):
     totaal_prijs_per_regel: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     eenheidsprijs: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     bron_pagina: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    normalized_key: Mapped[str | None] = mapped_column(String(180), nullable=True, index=True)
+    normalized_omschrijving: Mapped[str | None] = mapped_column(Text, nullable=True)
+    normalization_method: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    normalization_score: Mapped[int] = mapped_column(Integer, default=0)
+    normalization_candidate: Mapped[str | None] = mapped_column(Text, nullable=True)
     confidence: Mapped[int] = mapped_column(Integer, default=100)
     raw_text: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     dataset: Mapped[ReferenceDataset] = relationship(back_populates="lines")
+
+
+class NormalizationTerm(Base):
+    __tablename__ = "normalization_terms"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    canonical_key: Mapped[str] = mapped_column(String(180), nullable=False, index=True)
+    canonical_label: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    alias: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(80), default="omschrijving", index=True)
+    match_type: Mapped[str] = mapped_column(String(40), default="fuzzy", index=True)
+    min_score: Mapped[int] = mapped_column(Integer, default=82)
+    active: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class AssessmentTemplate(Base):

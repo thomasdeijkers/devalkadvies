@@ -875,11 +875,94 @@ textarea {
   color: var(--muted);
 }
 
+.entity-list {
+  display: grid;
+  gap: 8px;
+}
+
+.entity-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.entity-row strong,
+.entity-row small {
+  display: block;
+}
+
+.entity-row strong {
+  color: #fff;
+}
+
+.entity-row small {
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-row form {
+  margin: 0;
+}
+
 .entity-type {
   color: #8bd5e6;
   font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
+}
+
+.reference-search-panel,
+.assessment-history {
+  margin-top: 14px;
+}
+
+.reference-table {
+  overflow-x: auto;
+  margin-top: 14px;
+  border: 1px solid rgba(126, 169, 219, 0.22);
+  border-radius: 7px;
+}
+
+.reference-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.9fr) minmax(160px, 0.9fr) minmax(150px, 0.8fr) minmax(300px, 1.6fr) 76px 62px 108px minmax(190px, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-width: 1240px;
+  padding: 9px 10px;
+  border-top: 1px solid rgba(126, 169, 219, 0.16);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.reference-head {
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.06);
+  border-top: 0;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.reference-row strong,
+.reference-row small {
+  display: block;
+}
+
+.reference-row small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.normalization-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  margin-top: 14px;
 }
 
 .modal-card {
@@ -1301,7 +1384,7 @@ textarea {
 
 .budget-row {
   display: grid;
-  grid-template-columns: minmax(250px, 1.45fr) 78px 62px 74px 74px 90px 90px 90px 108px 108px 58px 44px;
+  grid-template-columns: minmax(250px, 1.45fr) 78px 62px 74px 74px 90px 90px 90px 108px 108px 82px 44px;
   gap: 8px;
   align-items: center;
   min-width: 1140px;
@@ -1330,6 +1413,50 @@ textarea {
 .delete-check input {
   width: 18px;
   height: 18px;
+}
+
+.line-score {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+}
+
+.line-score small {
+  max-width: 76px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.normalization-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 12px 0;
+  padding: 10px;
+  border: 1px solid rgba(77, 177, 201, 0.35);
+  border-radius: 7px;
+  background: rgba(77, 177, 201, 0.11);
+}
+
+.normalization-strip strong {
+  color: #fff;
+}
+
+.normalization-strip span {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  max-width: 260px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(2, 22, 43, 0.66);
+  color: var(--soft);
+  font-size: 12px;
 }
 
 .line-actions {
