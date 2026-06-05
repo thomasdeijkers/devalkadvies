@@ -303,89 +303,196 @@
   {% endif %}
 
   {% if active_page == "normalisatie" %}
-  <section class="module-grid">
-    <article class="panel data-form-panel">
-      <span class="chip automatic">Lerende laag</span>
-      <h3>Synoniem of standaardterm toevoegen</h3>
-      <p>Gebruik harde termen voor vaste basisbegrippen. Gebruik fuzzy voor omschrijvingen die op elkaar lijken maar niet exact gelijk zijn.</p>
-      <form action="/normalisatie/terms" method="post" class="stack-form">
-        <input name="canonical_label" placeholder="Standaardomschrijving, bv. Maatvoering" required>
-        <textarea name="aliases" placeholder="Synoniemen, een per regel. Bijvoorbeeld: hoofdmaatvoering&#10;controle maatvoering"></textarea>
+  <section class="normalization-workbench">
+    <article class="panel normalization-command">
+      <div>
+        <span class="chip automatic">Lerende laag</span>
+        <h3>Synoniem of standaardterm toevoegen</h3>
+        <p>Hard voor vaste basiswaarden, fuzzy voor voorstellen die je eerst wilt beoordelen.</p>
+      </div>
+      <form action="/normalisatie/terms" method="post" class="normalization-inline-form">
+        <input name="canonical_label" placeholder="Standaardomschrijving" required>
+        <input name="aliases" placeholder="Synoniemen, scheiden met ;">
         <select name="match_type">
-          <option value="hard">Hard matchen</option>
-          <option value="fuzzy">Fuzzy voorstel</option>
+          <option value="hard">Hard</option>
+          <option value="fuzzy">Fuzzy</option>
         </select>
         <input name="category" value="omschrijving" placeholder="Categorie">
-        <input name="min_score" value="82" placeholder="Minimale score">
-        <button type="submit">Term opslaan</button>
+        <input name="min_score" value="82" placeholder="Score">
+        <button type="submit">Opslaan</button>
       </form>
-    </article>
-    <article class="panel">
-      <span class="chip manual">Status</span>
-      <h3>Normalisatie overzicht</h3>
-      <div class="metric-strip">
-        <p><strong>{{ normalization_stats.term_count }}</strong><span>termen</span></p>
-        <p><strong>{{ normalization_stats.suggestions }}</strong><span>voorstellen</span></p>
-        <p><strong>{{ normalization_stats.hard_matches }}</strong><span>harde matches</span></p>
-        <p><strong>{{ normalization_stats.fuzzy_matches }}</strong><span>fuzzy/reference</span></p>
+      <div class="normalization-kpis">
+        <span><strong>{{ normalization_stats.term_count }}</strong> termen</span>
+        <span><strong>{{ normalization_stats.suggestions }}</strong> voorstellen</span>
+        <span><strong>{{ normalization_stats.hard_matches }}</strong> hard</span>
+        <span><strong>{{ normalization_stats.fuzzy_matches }}</strong> fuzzy</span>
+        <form action="/normalisatie/apply" method="post">
+          <button class="mini-button" type="submit">Opnieuw normaliseren</button>
+        </form>
       </div>
-      <form action="/normalisatie/apply" method="post" class="stack-form">
-        <button type="submit">Alle regels opnieuw normaliseren</button>
-      </form>
     </article>
-  </section>
 
-  <section class="data-grid normalization-grid">
-    <article class="panel">
+    <article class="panel normalization-wide">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Voorstellen</span>
+          <h2>Normalisatievoorstellen</h2>
+          <p>Valideer goede matches meteen, of open een voorstel om handmatig aan te vullen.</p>
+        </div>
+        <div class="signal-legend">
+          <span class="signal-pill high">hoog</span>
+          <span class="signal-pill mid">twijfel</span>
+          <span class="signal-pill low">aanvullen</span>
+        </div>
+      </div>
+      <div class="normalization-table suggestion-table">
+        {% if normalization_candidates %}
+          <div class="normalization-row normalization-head">
+            <span>Signaal</span>
+            <span>Voorstel</span>
+            <span>Bronregel</span>
+            <span>Project / bestand</span>
+            <span>Acties</span>
+          </div>
+          {% for line in normalization_candidates %}
+            {% set score_class = "high" if line.normalization_score >= 85 else "mid" if line.normalization_score >= 65 else "low" %}
+            {% set candidate = line.normalization_candidate or line.normalized_omschrijving or line.omschrijving_werkzaamheden %}
+            <div class="normalization-row">
+              <span><mark class="signal-pill {{ score_class }}">{{ line.normalization_score }}%</mark></span>
+              <span>
+                <strong>{{ candidate or "Nieuwe term nodig" }}</strong>
+                <small>{{ line.normalization_method or "raw" }}</small>
+              </span>
+              <span>{{ line.omschrijving_werkzaamheden }}</span>
+              <span>
+                {% if line.document %}
+                  {{ line.document.project.name if line.document.project else line.document.project_name or "Geen project" }}
+                  <small>{{ line.document.original_filename }}</small>
+                {% else %}
+                  -
+                {% endif %}
+              </span>
+              <span class="row-actions">
+                {% if line.normalization_candidate %}
+                  <form action="/normalisatie/suggesties/{{ line.id }}/validate" method="post">
+                    <button class="mini-button success" type="submit">Valideren</button>
+                  </form>
+                {% endif %}
+                <a class="mini-button" href="#suggestie-{{ line.id }}">Aanvullen</a>
+                {% if line.document %}
+                  <a class="mini-button" href="/documents/{{ line.document.id }}">Openen</a>
+                {% endif %}
+              </span>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="empty-state">
+            <strong>Nog geen voorstellen</strong>
+            <span>Klik op opnieuw normaliseren of upload eerst begrotingen/kengetallen.</span>
+          </div>
+        {% endif %}
+      </div>
+    </article>
+
+    <article class="panel normalization-wide">
       <div class="section-heading">
         <div>
           <span class="eyebrow">Basiswoordenboek</span>
           <h2>Vaste termen en synoniemen</h2>
         </div>
       </div>
-      <div class="entity-list">
-        {% for term in normalization_terms %}
-          <article class="entity-row">
-            <div>
-              <span class="entity-type">{{ term.match_type }} - {{ term.min_score }}%</span>
-              <strong>{{ term.canonical_label }}</strong>
-              <small>{{ term.alias }} - {{ term.category }}</small>
-            </div>
-            <form action="/normalisatie/terms/{{ term.id }}/delete" method="post" onsubmit="return confirm('Deze normalisatieterm verwijderen?');">
-              <button class="mini-button danger" type="submit">Verwijderen</button>
-            </form>
-          </article>
-        {% else %}
-          <p class="muted">Nog geen normalisatietermen toegevoegd.</p>
-        {% endfor %}
-      </div>
-    </article>
-    <article class="panel">
-      <div class="section-heading">
-        <div>
-          <span class="eyebrow">Voorstellen</span>
-          <h2>Fuzzy matches om te beoordelen</h2>
-          <p>Deze regels lijken op een standaardterm of kengetal, maar zijn nog geen harde match.</p>
+      <div class="normalization-table term-table">
+        <div class="normalization-row normalization-head">
+          <span>Type</span>
+          <span>Standaardterm</span>
+          <span>Synoniem</span>
+          <span>Categorie</span>
+          <span>Acties</span>
         </div>
-      </div>
-      <div class="entity-list">
-        {% for line in normalization_candidates %}
-          <article class="entity-row">
-            <div>
-              <span class="entity-type">{{ line.normalization_method }} - {{ line.normalization_score }}%</span>
-              <strong>{{ line.normalization_candidate }}</strong>
-              <small>{{ line.omschrijving_werkzaamheden }}{% if line.document %} - {{ line.document.original_filename }}{% endif %}</small>
-            </div>
-            {% if line.document %}
-              <a class="mini-button" href="/documents/{{ line.document.id }}">Openen</a>
-            {% endif %}
-          </article>
+        {% for term in normalization_terms %}
+          <div class="normalization-row">
+            <span><mark class="signal-pill {% if term.match_type == 'hard' %}high{% else %}mid{% endif %}">{{ term.match_type }} {{ term.min_score }}%</mark></span>
+            <span>
+              <strong>{{ term.canonical_label }}</strong>
+              <small>{{ term.canonical_key }}</small>
+            </span>
+            <span>{{ term.alias }}</span>
+            <span>{{ term.category }}</span>
+            <span class="row-actions">
+              <a class="mini-button" href="#term-{{ term.id }}">Openen</a>
+              <form action="/normalisatie/terms/{{ term.id }}/delete" method="post" onsubmit="return confirm('Deze normalisatieterm verwijderen?');">
+                <button class="mini-button danger" type="submit">Verwijderen</button>
+              </form>
+            </span>
+          </div>
         {% else %}
-          <p class="muted">Nog geen fuzzy voorstellen. Upload of normaliseer eerst data.</p>
+          <div class="empty-state">
+            <strong>Nog geen normalisatietermen</strong>
+            <span>Voeg de eerste standaardterm of synoniem toe.</span>
+          </div>
         {% endfor %}
       </div>
     </article>
   </section>
+
+  {% for term in normalization_terms %}
+    <div id="term-{{ term.id }}" class="modal-card">
+      <a class="modal-backdrop" href="/normalisatie"></a>
+      <article class="modal-panel">
+        <a class="modal-close" href="/normalisatie">Sluiten</a>
+        <span class="entity-type">{{ term.match_type }} - {{ term.min_score }}%</span>
+        <h2>{{ term.canonical_label }}</h2>
+        <form action="/normalisatie/terms/{{ term.id }}" method="post" class="stack-form">
+          <input name="canonical_label" value="{{ term.canonical_label }}" placeholder="Standaardterm" required>
+          <input name="alias" value="{{ term.alias }}" placeholder="Synoniem" required>
+          <select name="match_type">
+            <option value="hard" {% if term.match_type == "hard" %}selected{% endif %}>Hard</option>
+            <option value="fuzzy" {% if term.match_type == "fuzzy" %}selected{% endif %}>Fuzzy</option>
+          </select>
+          <input name="category" value="{{ term.category }}" placeholder="Categorie">
+          <input name="min_score" value="{{ term.min_score }}" placeholder="Minimale score">
+          <label class="check-row">
+            <input type="checkbox" name="active" value="1" {% if term.active %}checked{% endif %}>
+            <span>Actief</span>
+          </label>
+          <button type="submit">Term bijwerken</button>
+        </form>
+      </article>
+    </div>
+  {% endfor %}
+
+  {% for line in normalization_candidates %}
+    {% set candidate = line.normalization_candidate or line.normalized_omschrijving or line.omschrijving_werkzaamheden %}
+    <div id="suggestie-{{ line.id }}" class="modal-card">
+      <a class="modal-backdrop" href="/normalisatie"></a>
+      <article class="modal-panel wide">
+        <a class="modal-close" href="/normalisatie">Sluiten</a>
+        <span class="entity-type">Voorstel - {{ line.normalization_score }}%</span>
+        <h2>{{ candidate or "Nieuwe normalisatieterm" }}</h2>
+        <div class="business-card">
+          <strong>Bronregel</strong>
+          <span>{{ line.omschrijving_werkzaamheden }}</span>
+          {% if line.document %}<span>{{ line.document.original_filename }}</span>{% endif %}
+        </div>
+        <form action="/normalisatie/suggesties/{{ line.id }}/terms" method="post" class="stack-form">
+          <input name="canonical_label" value="{{ candidate }}" placeholder="Standaardterm" required>
+          <textarea name="aliases" placeholder="Synoniemen, een per regel">{{ line.omschrijving_werkzaamheden }}</textarea>
+          <select name="match_type">
+            <option value="hard">Hard</option>
+            <option value="fuzzy" selected>Fuzzy</option>
+          </select>
+          <input name="category" value="omschrijving" placeholder="Categorie">
+          <input name="min_score" value="82" placeholder="Minimale score">
+          <button type="submit">Aanvullen en opnieuw normaliseren</button>
+        </form>
+        {% if line.normalization_candidate %}
+          <form action="/normalisatie/suggesties/{{ line.id }}/validate" method="post" class="stack-form">
+            <button type="submit">Voorstel direct valideren</button>
+          </form>
+        {% endif %}
+      </article>
+    </div>
+  {% endfor %}
   {% endif %}
 
   {% if active_page == "templates" %}

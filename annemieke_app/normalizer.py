@@ -14,16 +14,51 @@ from .models import BudgetLine, NormalizationTerm, ReferenceLine
 DEFAULT_TERMS = [
     ("uitgangspunten", "Uitgangspunten", ["uitgangspunt", "uitgangspunten", "onderliggende begroting"], "hard", 100),
     ("energie_prestatie", "Energie prestatie", ["energie prestatie", "energieprestatie", "energielabel"], "hard", 100),
-    ("vooropname", "Vooropname", ["vooropname", "voor opname", "omliggende belendingen"], "hard", 100),
-    ("flora_fauna", "Flora en fauna", ["flora en fauna", "flora fauna"], "hard", 100),
-    ("maatvoering", "Maatvoering", ["maatvoering", "hoofdmaatvoering", "controle maatvoering"], "hard", 100),
+    ("vooropname", "Vooropname", ["vooropname", "voor opname", "opname belendingen", "omliggende belendingen"], "hard", 100),
+    ("flora_fauna", "Flora en fauna", ["flora en fauna", "flora fauna", "ecologie"], "hard", 100),
+    ("maatvoering", "Maatvoering", ["maatvoering", "hoofdmaatvoering", "controle maatvoering", "inmeten"], "hard", 100),
     ("zav", "Zelf aangebrachte voorzieningen", ["zav", "zav's", "zelf aangebrachte voorzieningen"], "hard", 100),
-    ("projectleiding", "Projectleiding", ["projectleiding", "project leider"], "fuzzy", 84),
-    ("uitvoering", "Uitvoering", ["uitvoering", "uitvoerder", "uitvoering assistent"], "fuzzy", 84),
+    ("projectleiding", "Projectleiding", ["projectleiding", "project leider", "projectleider"], "fuzzy", 84),
+    ("werkvoorbereiding", "Werkvoorbereiding", ["werkvoorbereiding", "werkvoorbereider"], "fuzzy", 84),
+    ("uitvoering", "Uitvoering", ["uitvoering", "uitvoerder", "uitvoering assistent", "uitvoeringskosten"], "fuzzy", 84),
     ("voorman", "Voorman", ["voorman", "meewerkend voorman"], "fuzzy", 84),
-    ("bouwplaats", "Bouwplaatskosten", ["bouwplaatskosten", "bouwplaats voorziening", "algemene bouwplaats"], "fuzzy", 84),
-    ("opruimen", "Opruimen en schoonmaken", ["opruimen", "schoonmaken", "bouw schoonmaken"], "fuzzy", 84),
+    ("organisatiedeskundige", "Organisatiedeskundige", ["organisatiedeskundige", "organisatiedeskundige bouw"], "fuzzy", 84),
+    ("organisatiemedewerker", "Organisatiemedewerker", ["organisatiemedewerker", "organisatiemedewerker aankomend"], "fuzzy", 84),
+    ("bouwplaats", "Bouwplaatskosten", ["bouwplaatskosten", "bouwplaats voorziening", "algemene bouwplaats", "bouwplaatsinrichting"], "fuzzy", 84),
+    ("bouwhek", "Bouwhekken", ["bouwhek", "bouwhekken", "hekwerk", "tijdelijke hekwerken"], "fuzzy", 84),
+    ("schaftkeet", "Schaft- en kantoorvoorzieningen", ["schaftkeet", "directiekeet", "kantoorunit", "bouwkeet"], "fuzzy", 84),
+    ("opruimen", "Opruimen en schoonmaken", ["opruimen", "schoonmaken", "bouw schoonmaken", "opleveringsschoonmaak"], "fuzzy", 84),
+    ("afval", "Afval en afvoer", ["afval", "afvoer", "container", "puinafvoer", "stortkosten"], "fuzzy", 84),
+    ("steiger", "Steigerwerk", ["steiger", "steigerwerk", "rolsteiger", "gevelsteiger", "huur rolsteigerwerk"], "fuzzy", 84),
     ("mobiele_kraan", "Mobiele kraan", ["mobiele kraan", "mobiele kranen", "kraan fundering"], "fuzzy", 84),
+    ("torenkraan", "Torenkraan", ["torenkraan", "huurprijs torenkraan"], "fuzzy", 84),
+    ("verreiker", "Verreiker", ["verreiker", "bemanning verreiker"], "fuzzy", 84),
+    ("transport", "Transport", ["transport", "horizontaal transport", "verticaal transport", "bouwlift"], "fuzzy", 84),
+    ("sloopwerk", "Sloopwerk", ["sloopwerk", "slopen", "demontage", "verwijderen bestaand"], "fuzzy", 84),
+    ("grondwerk", "Grondwerk", ["grondwerk", "ontgraven", "aanvullen", "zandbed"], "fuzzy", 84),
+    ("fundering", "Fundering", ["fundering", "funderingswerk", "palen", "poeren"], "fuzzy", 84),
+    ("betonwerk", "Betonwerk", ["betonwerk", "betonvloer", "wapening", "bekisting"], "fuzzy", 84),
+    ("metselwerk", "Metselwerk", ["metselwerk", "metselen", "lijmwerk", "kalkzandsteen"], "fuzzy", 84),
+    ("gevel", "Gevelwerk", ["gevel", "gevelwerk", "geveldrager", "gevelbekleding"], "fuzzy", 84),
+    ("kozijnen", "Kozijnen", ["kozijn", "kozijnen", "raamkozijn", "deurkozijn", "hout kozijn"], "fuzzy", 84),
+    ("beglazing", "Beglazing", ["beglazing", "glas", "isolatieglas", "hr glas"], "fuzzy", 84),
+    ("dak", "Dakwerk", ["dak", "dakwerk", "dakconstructie", "dakrand"], "fuzzy", 84),
+    ("dakbedekking", "Dakbedekking", ["dakbedekking", "bitumen", "epdm", "dakisolatie"], "fuzzy", 84),
+    ("isolatie", "Isolatie", ["isolatie", "thermische isolatie", "akoestische isolatie"], "fuzzy", 84),
+    ("wanden", "Binnenwanden", ["binnenwand", "binnenwanden", "metal stud", "scheidingswand"], "fuzzy", 84),
+    ("plafonds", "Plafonds", ["plafond", "plafonds", "systeemplafond"], "fuzzy", 84),
+    ("vloeren", "Vloerafwerking", ["vloerafwerking", "vloer", "dekvloer", "gietvloer"], "fuzzy", 84),
+    ("tegelwerk", "Tegelwerk", ["tegelwerk", "wandtegel", "vloertegel"], "fuzzy", 84),
+    ("schilderwerk", "Schilderwerk", ["schilderwerk", "sauzen", "lakwerk"], "fuzzy", 84),
+    ("keuken", "Keukenrenovatie", ["keuken", "keukenrenovatie", "keukenblok"], "fuzzy", 84),
+    ("badkamer", "Badkamerrenovatie", ["badkamer", "badkamerrenovatie", "sanitair badkamer"], "fuzzy", 84),
+    ("toilet", "Toiletrenovatie", ["toilet", "toiletrenovatie", "wc renovatie"], "fuzzy", 84),
+    ("elektra", "Elektrotechnische installatie", ["elektra", "elektrotechnisch", "e installatie", "e-installatie"], "fuzzy", 84),
+    ("werktuigbouw", "Werktuigbouwkundige installatie", ["werktuigbouw", "wtb", "w installatie", "w-installatie"], "fuzzy", 84),
+    ("ventilatie", "Ventilatie", ["ventilatie", "luchtbehandeling", "mechanische ventilatie"], "fuzzy", 84),
+    ("brandveiligheid", "Brandveiligheid", ["brandwerend", "brandveiligheid", "brandpreventie"], "fuzzy", 84),
+    ("bewonerscommunicatie", "Bewonerscommunicatie", ["bewonerscommunicatie", "communicatie bewoners", "bewonersbegeleiding"], "fuzzy", 84),
+    ("oplevering", "Oplevering en nazorg", ["oplevering", "nazorg", "as built", "revisie"], "fuzzy", 84),
 ]
 
 NOISE_FRAGMENTS = {
@@ -36,11 +71,17 @@ NOISE_FRAGMENTS = {
 }
 
 
-def seed_default_normalization_terms(session: Session) -> None:
-    if session.scalar(select(NormalizationTerm.id).limit(1)):
-        return
+def seed_default_normalization_terms(session: Session) -> bool:
+    existing = {
+        (term.canonical_key, normalization_key(term.alias))
+        for term in session.scalars(select(NormalizationTerm)).all()
+    }
+    changed = False
     for canonical_key, canonical_label, aliases, match_type, min_score in DEFAULT_TERMS:
         for alias in aliases:
+            lookup = (canonical_key, normalization_key(alias))
+            if lookup in existing:
+                continue
             session.add(
                 NormalizationTerm(
                     canonical_key=canonical_key,
@@ -52,7 +93,11 @@ def seed_default_normalization_terms(session: Session) -> None:
                     active=1,
                 )
             )
-    session.commit()
+            existing.add(lookup)
+            changed = True
+    if changed:
+        session.commit()
+    return changed
 
 
 def normalize_text(value: str | None) -> str:

@@ -960,9 +960,167 @@ textarea {
   font-size: 12px;
 }
 
-.normalization-grid {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  margin-top: 14px;
+.normalization-workbench {
+  display: grid;
+  gap: 12px;
+}
+
+.normalization-command {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.normalization-command p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.normalization-inline-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.1fr) minmax(220px, 1.3fr) 92px 130px 72px 96px;
+  gap: 8px;
+}
+
+.normalization-inline-form input,
+.normalization-inline-form select,
+.normalization-inline-form button {
+  min-width: 0;
+  min-height: 38px;
+}
+
+.normalization-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(84px, 1fr));
+  gap: 6px;
+  min-width: 290px;
+}
+
+.normalization-kpis span,
+.normalization-kpis form {
+  min-height: 36px;
+  margin: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(2, 22, 43, 0.54);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.normalization-kpis strong {
+  color: #fff;
+  font-size: 18px;
+}
+
+.normalization-kpis form {
+  grid-column: span 2;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.normalization-kpis .mini-button {
+  width: 100%;
+}
+
+.normalization-wide {
+  width: 100%;
+}
+
+.normalization-table {
+  overflow-x: auto;
+  margin-top: 10px;
+  border: 1px solid rgba(126, 169, 219, 0.22);
+  border-radius: 7px;
+}
+
+.normalization-row {
+  display: grid;
+  gap: 10px;
+  align-items: center;
+  min-height: 44px;
+  padding: 7px 10px;
+  border-top: 1px solid rgba(126, 169, 219, 0.16);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.suggestion-table .normalization-row {
+  grid-template-columns: 82px minmax(170px, 0.9fr) minmax(360px, 1.7fr) minmax(220px, 1fr) 250px;
+  min-width: 1220px;
+}
+
+.term-table .normalization-row {
+  grid-template-columns: 104px minmax(220px, 1fr) minmax(320px, 1.6fr) 130px 220px;
+  min-width: 1100px;
+}
+
+.normalization-head {
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.06);
+  border-top: 0;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.normalization-row strong,
+.normalization-row small {
+  display: block;
+}
+
+.normalization-row strong {
+  color: #fff;
+}
+
+.normalization-row small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.signal-pill {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.signal-pill.high {
+  color: #002315;
+  background: #2de38a;
+}
+
+.signal-pill.mid {
+  color: #2b1800;
+  background: #ffc754;
+}
+
+.signal-pill.low {
+  color: #fff;
+  background: #ff6b35;
+}
+
+.mini-button.success {
+  color: #002315;
+  background: #2de38a;
+  border-color: rgba(45, 227, 138, 0.72);
 }
 
 .modal-card {
@@ -1623,6 +1781,7 @@ pre {
   .metrics,
   .pipeline-grid,
   .module-grid,
+  .normalization-command,
   .data-grid,
   .input-overview,
   .consult-form,
@@ -1648,6 +1807,15 @@ pre {
 
   .budget-tools {
     grid-template-columns: 1fr;
+  }
+
+  .normalization-inline-form,
+  .normalization-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .normalization-kpis form {
+    grid-column: auto;
   }
 
   .table-row {

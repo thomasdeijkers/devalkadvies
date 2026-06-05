@@ -91,7 +91,8 @@ templates.env.filters["unit_price"] = calculated_unit_price
 def startup() -> None:
     create_db()
     with SessionLocal() as session:
-        seed_default_normalization_terms(session)
+        if seed_default_normalization_terms(session):
+            _reapply_all_normalization(session)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -243,15 +244,9 @@ def _render_workspace(
         .limit(30)
     ).all()
     normalization_terms = session.scalars(
-        select(NormalizationTerm).order_by(NormalizationTerm.canonical_label, NormalizationTerm.alias).limit(200)
+        select(NormalizationTerm).order_by(NormalizationTerm.canonical_label, NormalizationTerm.alias).limit(400)
     ).all()
-    normalization_candidates = session.scalars(
-        select(BudgetLine)
-        .where(BudgetLine.normalization_candidate.is_not(None))
-        .where(BudgetLine.normalization_score < 100)
-        .order_by(BudgetLine.id.desc())
-        .limit(40)
-    ).all()
+    normalization_candidates = _normalization_candidate_lines(session) if active_page == "normalisatie" else []
     normalization_stats = _normalization_stats(session)
     status_context = _status_context(session)
     consult_lines = _consult_lines(session, query, status, date_from, date_to, priced, min_score) if active_page == "consult" else []
@@ -472,26 +467,37 @@ def create_normalization_term(
     min_score: str = Form("82"),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    _add_normalization_terms(session, canonical_label, aliases, category, match_type, min_score)
+    _reapply_all_normalization(session)
+    return RedirectResponse("/normalisatie", status_code=303)
+
+
+@app.post("/normalisatie/terms/{term_id}")
+def update_normalization_term(
+    term_id: int,
+    canonical_label: str = Form(...),
+    alias: str = Form(...),
+    category: str = Form("omschrijving"),
+    match_type: str = Form("fuzzy"),
+    min_score: str = Form("82"),
+    active: str = Form(""),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    term = session.get(NormalizationTerm, term_id)
+    if term is None:
+        raise HTTPException(status_code=404, detail="Normalisatieterm niet gevonden.")
     label = canonical_label.strip()
-    if not label:
-        raise HTTPException(status_code=400, detail="Vul een standaardomschrijving in.")
-    term_type = match_type if match_type in {"hard", "fuzzy"} else "fuzzy"
-    score = max(50, min(100, _int_or_none(min_score) or 82))
-    alias_values = split_aliases(aliases) or [label]
-    canonical_key = normalization_key(label) or label.lower().replace(" ", "_")[:180]
-    for alias in alias_values:
-        session.add(
-            NormalizationTerm(
-                canonical_key=canonical_key,
-                canonical_label=label,
-                alias=alias,
-                category=category.strip() or "omschrijving",
-                match_type=term_type,
-                min_score=score,
-                active=1,
-            )
-        )
-    session.commit()
+    alias_value = alias.strip()
+    if not label or not alias_value:
+        raise HTTPException(status_code=400, detail="Vul standaardterm en synoniem in.")
+    term.canonical_label = label
+    term.canonical_key = normalization_key(label) or label.lower().replace(" ", "_")[:180]
+    term.alias = alias_value
+    term.category = category.strip() or "omschrijving"
+    term.match_type = match_type if match_type in {"hard", "fuzzy"} else "fuzzy"
+    term.min_score = max(50, min(100, _int_or_none(min_score) or 82))
+    term.active = 1 if active else 0
+    _reapply_all_normalization(session)
     return RedirectResponse("/normalisatie", status_code=303)
 
 
@@ -501,21 +507,54 @@ def delete_normalization_term(term_id: int, session: Session = Depends(get_sessi
     if term is None:
         raise HTTPException(status_code=404, detail="Normalisatieterm niet gevonden.")
     session.delete(term)
-    session.commit()
+    _reapply_all_normalization(session)
     return RedirectResponse("/normalisatie", status_code=303)
 
 
 @app.post("/normalisatie/apply")
 def apply_normalization_to_existing(session: Session = Depends(get_session)) -> RedirectResponse:
-    reference_lines = session.scalars(select(ReferenceLine)).all()
-    apply_normalization(session, reference_lines)
-    session.flush()
+    _reapply_all_normalization(session)
+    return RedirectResponse("/normalisatie", status_code=303)
 
-    budget_lines = session.scalars(select(BudgetLine)).all()
-    for line in budget_lines:
-        _normalize_line_prices(line)
-    apply_normalization(session, budget_lines)
-    session.commit()
+
+@app.post("/normalisatie/suggesties/{line_id}/validate")
+def validate_normalization_suggestion(line_id: int, session: Session = Depends(get_session)) -> RedirectResponse:
+    line = session.get(BudgetLine, line_id)
+    if line is None:
+        raise HTTPException(status_code=404, detail="Voorstel niet gevonden.")
+    canonical_label = (line.normalization_candidate or line.normalized_omschrijving or line.omschrijving_werkzaamheden).strip()
+    if not canonical_label:
+        raise HTTPException(status_code=400, detail="Geen voorstel beschikbaar.")
+    _add_normalization_terms(
+        session,
+        canonical_label,
+        line.omschrijving_werkzaamheden,
+        "omschrijving",
+        "hard",
+        "100",
+    )
+    _reapply_all_normalization(session)
+    return RedirectResponse("/normalisatie", status_code=303)
+
+
+@app.post("/normalisatie/suggesties/{line_id}/terms")
+def create_term_from_suggestion(
+    line_id: int,
+    canonical_label: str = Form(...),
+    aliases: str = Form(""),
+    category: str = Form("omschrijving"),
+    match_type: str = Form("fuzzy"),
+    min_score: str = Form("82"),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    line = session.get(BudgetLine, line_id)
+    if line is None:
+        raise HTTPException(status_code=404, detail="Voorstel niet gevonden.")
+    alias_values = aliases
+    if line.omschrijving_werkzaamheden and line.omschrijving_werkzaamheden not in alias_values:
+        alias_values = f"{line.omschrijving_werkzaamheden}\n{alias_values}".strip()
+    _add_normalization_terms(session, canonical_label, alias_values, category, match_type, min_score)
+    _reapply_all_normalization(session)
     return RedirectResponse("/normalisatie", status_code=303)
 
 
@@ -1284,6 +1323,26 @@ def _reference_lines(session: Session, query: str | None, limit: int = 300) -> l
     ).unique().all()
 
 
+def _normalization_candidate_lines(session: Session, limit: int = 120) -> list[BudgetLine]:
+    return session.scalars(
+        select(BudgetLine)
+        .join(BudgetLine.document)
+        .where(
+            BudgetLine.normalization_score < 100,
+            or_(
+                BudgetLine.normalization_candidate.is_not(None),
+                and_(
+                    BudgetLine.normalization_method.in_(["raw", "reference"]),
+                    BudgetLine.eenheidsprijs.is_not(None),
+                    BudgetLine.omschrijving_werkzaamheden != "",
+                ),
+            ),
+        )
+        .order_by(BudgetLine.normalization_candidate.is_(None), BudgetLine.normalization_score.desc(), BudgetLine.id.desc())
+        .limit(limit)
+    ).unique().all()
+
+
 def _normalization_stats(session: Session) -> dict[str, int]:
     budget_total = session.scalar(select(func.count(BudgetLine.id))) or 0
     reference_total = session.scalar(select(func.count(ReferenceLine.id))) or 0
@@ -1297,14 +1356,72 @@ def _normalization_stats(session: Session) -> dict[str, int]:
     fuzzy_matches = session.scalar(
         select(func.count(BudgetLine.id)).where(BudgetLine.normalization_method.in_(["fuzzy", "reference"]))
     ) or 0
+    raw_priced = session.scalar(
+        select(func.count(BudgetLine.id)).where(
+            BudgetLine.normalization_method.in_(["raw", "reference"]),
+            BudgetLine.eenheidsprijs.is_not(None),
+            BudgetLine.normalization_score < 100,
+        )
+    ) or 0
     return {
         "budget_total": int(budget_total),
         "reference_total": int(reference_total),
         "term_count": int(term_count),
-        "suggestions": int(suggestions),
+        "suggestions": int(suggestions) + int(raw_priced),
         "hard_matches": int(hard_matches),
         "fuzzy_matches": int(fuzzy_matches),
     }
+
+
+def _add_normalization_terms(
+    session: Session,
+    canonical_label: str,
+    aliases: str,
+    category: str,
+    match_type: str,
+    min_score: str,
+) -> list[NormalizationTerm]:
+    label = canonical_label.strip()
+    if not label:
+        raise HTTPException(status_code=400, detail="Vul een standaardomschrijving in.")
+    term_type = match_type if match_type in {"hard", "fuzzy"} else "fuzzy"
+    score = max(50, min(100, _int_or_none(min_score) or 82))
+    alias_values = split_aliases(aliases) or [label]
+    canonical_key = normalization_key(label) or label.lower().replace(" ", "_")[:180]
+    existing = {
+        (term.canonical_key, normalization_key(term.alias))
+        for term in session.scalars(select(NormalizationTerm)).all()
+    }
+    added: list[NormalizationTerm] = []
+    for alias in alias_values:
+        lookup = (canonical_key, normalization_key(alias))
+        if lookup in existing:
+            continue
+        term = NormalizationTerm(
+            canonical_key=canonical_key,
+            canonical_label=label,
+            alias=alias.strip(),
+            category=category.strip() or "omschrijving",
+            match_type=term_type,
+            min_score=score,
+            active=1,
+        )
+        session.add(term)
+        added.append(term)
+        existing.add(lookup)
+    return added
+
+
+def _reapply_all_normalization(session: Session) -> None:
+    reference_lines = session.scalars(select(ReferenceLine)).all()
+    apply_normalization(session, reference_lines)
+    session.flush()
+
+    budget_lines = session.scalars(select(BudgetLine)).all()
+    for line in budget_lines:
+        _normalize_line_prices(line)
+    apply_normalization(session, budget_lines)
+    session.commit()
 
 
 def _parse_document_background(document_id: int, usage_source: str, force_openai: bool = False) -> None:
