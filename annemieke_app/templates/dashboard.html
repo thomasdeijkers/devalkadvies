@@ -500,7 +500,7 @@
             <strong>{{ line.document.original_filename }}</strong>
             <a class="modal-close" href="/normalisatie">Sluiten</a>
           </div>
-          <iframe src="/documents/{{ line.document.id }}/original.pdf" title="Originele referentie"></iframe>
+          <iframe data-pdf-src="/documents/{{ line.document.id }}/original.pdf" title="Originele referentie"></iframe>
         </article>
       </div>
     {% endif %}
@@ -627,7 +627,7 @@
                 <strong>{{ document.original_filename }}</strong>
                 <a class="modal-close" href="/consult">Sluiten</a>
               </div>
-              <iframe src="/documents/{{ document.id }}/original.pdf" title="Originele PDF"></iframe>
+              <iframe data-pdf-src="/documents/{{ document.id }}/original.pdf" title="Originele PDF"></iframe>
             </article>
           </div>
         {% endfor %}

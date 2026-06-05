@@ -155,6 +155,19 @@
         menuToggle.addEventListener("click", () => setMenuOpen(!document.body.classList.contains("menu-open")));
       }
       menuCloseButtons.forEach((button) => button.addEventListener("click", () => setMenuOpen(false)));
+
+      const loadTargetPdf = () => {
+        const hash = window.location.hash;
+        if (!hash) return;
+        const target = document.querySelector(hash);
+        if (!target || !target.classList.contains("pdf-modal")) return;
+        const frame = target.querySelector("iframe[data-pdf-src]");
+        if (frame && !frame.getAttribute("src")) {
+          frame.setAttribute("src", frame.dataset.pdfSrc);
+        }
+      };
+      window.addEventListener("hashchange", loadTargetPdf);
+      loadTargetPdf();
     </script>
   </body>
 </html>
