@@ -92,6 +92,18 @@ def _apply_lightweight_migrations() -> None:
                 with engine.begin() as connection:
                     connection.execute(text(statement))
 
+    if "assessment_templates" in inspector.get_table_names():
+        template_columns = {column["name"] for column in inspector.get_columns("assessment_templates")}
+        template_migrations = {
+            "original_filename": "ALTER TABLE assessment_templates ADD COLUMN original_filename VARCHAR(255)",
+            "stored_filename": "ALTER TABLE assessment_templates ADD COLUMN stored_filename VARCHAR(255)",
+            "target_sheet": "ALTER TABLE assessment_templates ADD COLUMN target_sheet VARCHAR(120)",
+        }
+        for column_name, statement in template_migrations.items():
+            if column_name not in template_columns:
+                with engine.begin() as connection:
+                    connection.execute(text(statement))
+
 
 def get_session() -> Generator[Session, None, None]:
     session = SessionLocal()

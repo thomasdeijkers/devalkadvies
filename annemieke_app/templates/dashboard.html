@@ -202,11 +202,16 @@
     <article class="panel data-form-panel">
       <span class="chip automatic">Excel structuur</span>
       <h3>Template vastleggen</h3>
-      <p>Leg de kolommen en outputnaam vast. Later kunnen we hier echte Excel-templatebestanden en stylingregels aan koppelen.</p>
-      <form action="/templates" method="post" class="stack-form">
+      <p>Upload hier de exacte screening-output als gouden Exceltemplate. De app vult straks een kopie van dit bestand en behoudt de opzet en opmaak.</p>
+      <form action="/templates" method="post" enctype="multipart/form-data" class="stack-form">
         <input name="name" placeholder="Templatenaam" required>
         <input name="version" placeholder="Versie, bv. 2026.1">
         <input name="output_filename" placeholder="Output bestandsnaam">
+        <input name="target_sheet" placeholder="Werkbladnaam, leeg = automatisch herkennen">
+        <label class="file-picker wide">
+          <input name="file" type="file" accept=".xlsx,.xlsm">
+          <span>Screening template kiezen</span>
+        </label>
         <textarea name="required_columns" placeholder="Kolommen, komma-gescheiden"></textarea>
         <textarea name="description" placeholder="Omschrijving / afspraken voor beoordeling"></textarea>
         <button type="submit">Template opslaan</button>
@@ -220,7 +225,7 @@
           <article class="entity-card">
             <span class="entity-type">{{ template.status }}</span>
             <strong>{{ template.name }}</strong>
-            <small>{{ template.version or "geen versie" }}</small>
+            <small>{{ template.version or "geen versie" }}{% if template.original_filename %} · {{ template.original_filename }}{% endif %}</small>
           </article>
         {% else %}
           <p class="muted">Nog geen templates vastgelegd.</p>

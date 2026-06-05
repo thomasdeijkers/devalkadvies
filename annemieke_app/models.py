@@ -194,6 +194,9 @@ class AssessmentTemplate(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(180), nullable=False, index=True)
     version: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    original_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    stored_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    target_sheet: Mapped[str | None] = mapped_column(String(120), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     required_columns: Mapped[str] = mapped_column(
         Text,

@@ -31,6 +31,7 @@ from .models import (
     ScheduledJob,
 )
 from .parser import parse_pdf
+from .template_exporter import fill_screening_template
 
 
 app = FastAPI(title=settings.app_name)
@@ -389,22 +390,38 @@ async def upload_reference_dataset(
 
 
 @app.post("/templates")
-def create_assessment_template(
+async def create_assessment_template(
     name: str = Form(...),
     version: str = Form(""),
     description: str = Form(""),
     required_columns: str = Form(""),
     output_filename: str = Form(""),
+    target_sheet: str = Form(""),
+    file: UploadFile | None = File(None),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
     default_columns = (
         "omschrijving_werkzaamheden,hoeveelheid,eenheid,norm_arbeid,uren,materiaal,materieel,"
         "onderaannemer,eenheidsprijs,totaal_prijs_per_regel"
     )
+    stored_filename = None
+    original_filename = None
+    if file and file.filename:
+        suffix = Path(file.filename).suffix.lower()
+        if suffix not in {".xlsx", ".xlsm"}:
+            raise HTTPException(status_code=400, detail="Upload een Excel template (.xlsx of .xlsm).")
+        settings.upload_dir.mkdir(parents=True, exist_ok=True)
+        stored_filename = f"{uuid4().hex}{suffix}"
+        (settings.upload_dir / stored_filename).write_bytes(await file.read())
+        original_filename = file.filename
+
     session.add(
         AssessmentTemplate(
             name=name.strip(),
             version=version.strip() or None,
+            original_filename=original_filename,
+            stored_filename=stored_filename,
+            target_sheet=target_sheet.strip() or None,
             description=description.strip() or None,
             required_columns=required_columns.strip() or default_columns,
             output_filename=output_filename.strip() or None,
@@ -1039,6 +1056,32 @@ def export_control_model(document_id: int, session: Session = Depends(get_sessio
     )
 
 
+@app.get("/documents/{document_id}/screening.xlsx")
+def export_screening_template(document_id: int, session: Session = Depends(get_session)) -> StreamingResponse:
+    document = session.get(IncomingDocument, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document niet gevonden.")
+
+    template = _template_for_document(session, document)
+    if template and template.stored_filename:
+        template_path = settings.upload_dir / template.stored_filename
+        if template_path.exists():
+            stream = fill_screening_template(document, template_path, template.target_sheet)
+            filename = template.output_filename or f"screening-{document.id}.xlsx"
+            return StreamingResponse(
+                stream,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+
+    stream = control_model_document_to_xlsx(document)
+    return StreamingResponse(
+        stream,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="screening-fallback-{document.id}.xlsx"'},
+    )
+
+
 @app.get("/consult/export.xlsx")
 def export_consult_selection(
     q: str | None = None,
@@ -1162,6 +1205,27 @@ def _consult_lines(
     return session.scalars(
         statement.order_by(IncomingDocument.created_at.desc(), BudgetLine.line_number).limit(limit)
     ).unique().all()
+
+
+def _latest_template(session: Session) -> AssessmentTemplate | None:
+    return session.scalars(
+        select(AssessmentTemplate)
+        .where(AssessmentTemplate.status == "active")
+        .order_by(AssessmentTemplate.created_at.desc())
+        .limit(1)
+    ).first()
+
+
+def _template_for_document(session: Session, document: IncomingDocument) -> AssessmentTemplate | None:
+    for part in (document.parser_notes or "").split("|"):
+        key, _, value = part.strip().partition("=")
+        if key == "template_id":
+            template_id = _int_or_none(value)
+            if template_id:
+                template = session.get(AssessmentTemplate, template_id)
+                if template is not None:
+                    return template
+    return _latest_template(session)
 
 
 def _run_job(session: Session, job: ScheduledJob) -> int:
