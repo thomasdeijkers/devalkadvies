@@ -1064,9 +1064,34 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  cursor: pointer;
+  list-style: none;
   padding: 10px 12px;
-  border-bottom: 1px solid rgba(126, 169, 219, 0.18);
   background: rgba(77, 177, 201, 0.1);
+}
+
+.suggestion-group[open] .suggestion-group-header {
+  border-bottom: 1px solid rgba(126, 169, 219, 0.18);
+}
+
+.suggestion-group-header::-webkit-details-marker {
+  display: none;
+}
+
+.suggestion-group-header::after {
+  content: "Open";
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border: 1px solid rgba(141, 213, 230, 0.35);
+  border-radius: 6px;
+  color: #8bd5e6;
+  background: rgba(5, 31, 52, 0.72);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.suggestion-group[open] .suggestion-group-header::after {
+  content: "Sluit";
 }
 
 .suggestion-group-header > div {

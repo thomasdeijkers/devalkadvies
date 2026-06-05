@@ -156,18 +156,18 @@
       }
       menuCloseButtons.forEach((button) => button.addEventListener("click", () => setMenuOpen(false)));
 
-      const loadTargetPdf = () => {
+      const loadTargetPreview = () => {
         const hash = window.location.hash;
         if (!hash) return;
         const target = document.querySelector(hash);
         if (!target || !target.classList.contains("pdf-modal")) return;
-        const frame = target.querySelector("iframe[data-pdf-src]");
+        const frame = target.querySelector("iframe[data-preview-src]");
         if (frame && !frame.getAttribute("src")) {
-          frame.setAttribute("src", frame.dataset.pdfSrc);
+          frame.setAttribute("src", frame.dataset.previewSrc);
         }
       };
-      window.addEventListener("hashchange", loadTargetPdf);
-      loadTargetPdf();
+      window.addEventListener("hashchange", loadTargetPreview);
+      loadTargetPreview();
     </script>
   </body>
 </html>

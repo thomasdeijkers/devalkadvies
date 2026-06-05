@@ -2,6 +2,8 @@ import os
 import time
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
+from html import escape
+from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
@@ -296,19 +298,165 @@ def logo() -> FileResponse:
     return FileResponse(logo_path, media_type="image/webp")
 
 
-@app.get("/documents/{document_id}/original.pdf")
-def original_pdf(document_id: int, session: Session = Depends(get_session)) -> FileResponse:
+def _document_pdf_path(document_id: int, session: Session) -> tuple[IncomingDocument, Path]:
     document = session.get(IncomingDocument, document_id)
     if document is None:
         raise HTTPException(status_code=404, detail="Document niet gevonden.")
     file_path = settings.upload_dir / document.stored_filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="PDF niet gevonden.")
+    return document, file_path
+
+
+@app.get("/documents/{document_id}/original.pdf")
+def original_pdf(document_id: int, session: Session = Depends(get_session)) -> FileResponse:
+    document, file_path = _document_pdf_path(document_id, session)
     return FileResponse(
         file_path,
         media_type="application/pdf",
         filename=document.original_filename,
         content_disposition_type="inline",
+    )
+
+
+@app.get("/documents/{document_id}/preview", response_class=HTMLResponse)
+def document_preview(document_id: int, session: Session = Depends(get_session)) -> HTMLResponse:
+    document, file_path = _document_pdf_path(document_id, session)
+    try:
+        import fitz
+    except Exception as exc:  # pragma: no cover - dependency issue is deployment specific
+        raise HTTPException(status_code=500, detail="PDF preview kan niet worden gerenderd.") from exc
+
+    pdf = fitz.open(str(file_path))
+    try:
+        page_count = pdf.page_count
+    finally:
+        pdf.close()
+
+    safe_name = escape(document.original_filename)
+    pages = "\n".join(
+        (
+            '<section class="preview-page">'
+            f"<span>Pagina {page_number}</span>"
+            f'<img loading="lazy" src="/documents/{document_id}/preview/page/{page_number}.png" '
+            f'alt="Pagina {page_number} van {safe_name}">'
+            "</section>"
+        )
+        for page_number in range(1, page_count + 1)
+    )
+    if not pages:
+        pages = '<p class="empty">Geen pagina\'s gevonden in dit document.</p>'
+
+    return HTMLResponse(
+        f"""<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{safe_name}</title>
+    <style>
+      :root {{
+        color-scheme: dark;
+        --bg: #07131b;
+        --panel: #0d2132;
+        --line: #2b5878;
+        --text: #f7fbff;
+        --muted: #b8c9d7;
+        --accent: #4db1c9;
+      }}
+      * {{ box-sizing: border-box; }}
+      body {{
+        margin: 0;
+        color: var(--text);
+        background: var(--bg);
+        font-family: Arial, Helvetica, sans-serif;
+      }}
+      header {{
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(7, 19, 27, 0.96);
+      }}
+      strong {{
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+      }}
+      small {{
+        color: var(--muted);
+        font-size: 12px;
+      }}
+      main {{
+        display: grid;
+        gap: 18px;
+        padding: 18px;
+      }}
+      .preview-page {{
+        display: grid;
+        gap: 8px;
+        justify-items: center;
+      }}
+      .preview-page span {{
+        justify-self: start;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }}
+      img {{
+        width: min(100%, 1180px);
+        height: auto;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+      }}
+      .empty {{
+        color: var(--muted);
+      }}
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>{safe_name}</strong>
+      <small>Preview in popup</small>
+    </header>
+    <main>{pages}</main>
+  </body>
+</html>"""
+    )
+
+
+@app.get("/documents/{document_id}/preview/page/{page_number}.png")
+def document_preview_page(
+    document_id: int,
+    page_number: int,
+    session: Session = Depends(get_session),
+) -> StreamingResponse:
+    _, file_path = _document_pdf_path(document_id, session)
+    try:
+        import fitz
+    except Exception as exc:  # pragma: no cover - dependency issue is deployment specific
+        raise HTTPException(status_code=500, detail="PDF preview kan niet worden gerenderd.") from exc
+
+    pdf = fitz.open(str(file_path))
+    try:
+        if page_number < 1 or page_number > pdf.page_count:
+            raise HTTPException(status_code=404, detail="Pagina niet gevonden.")
+        page = pdf.load_page(page_number - 1)
+        pixmap = page.get_pixmap(matrix=fitz.Matrix(1.7, 1.7), alpha=False)
+        stream = BytesIO(pixmap.tobytes("png"))
+    finally:
+        pdf.close()
+
+    return StreamingResponse(
+        stream,
+        media_type="image/png",
+        headers={"Cache-Control": "private, max-age=600"},
     )
 
 

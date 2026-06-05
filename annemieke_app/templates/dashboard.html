@@ -349,14 +349,14 @@
         {% if normalization_candidate_groups %}
           {% for group in normalization_candidate_groups %}
             {% set group_score_class = "high" if group.best_score >= 85 else "mid" if group.best_score >= 65 else "low" %}
-            <section class="suggestion-group">
-              <header class="suggestion-group-header">
+            <details class="suggestion-group">
+              <summary class="suggestion-group-header">
                 <div>
                   <mark class="signal-pill {{ group_score_class }}">{{ group.best_score }}%</mark>
                   <strong>{{ group.label }}</strong>
                   <small>{{ group.count }} bronregels - {{ group.method_label }}</small>
                 </div>
-              </header>
+              </summary>
               <div class="normalization-row normalization-head">
                 <span>Signaal</span>
                 <span>Bronregel</span>
@@ -383,7 +383,7 @@
                   </span>
                 </div>
               {% endfor %}
-            </section>
+            </details>
           {% endfor %}
         {% else %}
           <div class="empty-state">
@@ -500,7 +500,7 @@
             <strong>{{ line.document.original_filename }}</strong>
             <a class="modal-close" href="/normalisatie">Sluiten</a>
           </div>
-          <iframe data-pdf-src="/documents/{{ line.document.id }}/original.pdf" title="Originele referentie"></iframe>
+          <iframe data-preview-src="/documents/{{ line.document.id }}/preview" title="Originele referentie"></iframe>
         </article>
       </div>
     {% endif %}
@@ -627,7 +627,7 @@
                 <strong>{{ document.original_filename }}</strong>
                 <a class="modal-close" href="/consult">Sluiten</a>
               </div>
-              <iframe data-pdf-src="/documents/{{ document.id }}/original.pdf" title="Originele PDF"></iframe>
+              <iframe data-preview-src="/documents/{{ document.id }}/preview" title="Originele PDF"></iframe>
             </article>
           </div>
         {% endfor %}
