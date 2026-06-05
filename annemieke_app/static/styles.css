@@ -1046,9 +1046,51 @@ textarea {
   background: rgba(255, 255, 255, 0.025);
 }
 
-.suggestion-table .normalization-row {
-  grid-template-columns: 82px minmax(170px, 0.9fr) minmax(360px, 1.7fr) minmax(220px, 1fr) 250px;
-  min-width: 1220px;
+.suggestion-table {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.suggestion-group {
+  overflow: hidden;
+  border: 1px solid rgba(126, 169, 219, 0.22);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.suggestion-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(126, 169, 219, 0.18);
+  background: rgba(77, 177, 201, 0.1);
+}
+
+.suggestion-group-header > div {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.suggestion-group-header strong {
+  color: #fff;
+  font-size: 15px;
+}
+
+.suggestion-group-header small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.suggestion-group .normalization-row {
+  grid-template-columns: 82px minmax(420px, 1fr) 270px;
+  min-width: 820px;
 }
 
 .term-table .normalization-row {

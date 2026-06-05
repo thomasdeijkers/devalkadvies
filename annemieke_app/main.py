@@ -247,6 +247,7 @@ def _render_workspace(
         select(NormalizationTerm).order_by(NormalizationTerm.canonical_label, NormalizationTerm.alias).limit(400)
     ).all()
     normalization_candidates = _normalization_candidate_lines(session) if active_page == "normalisatie" else []
+    normalization_candidate_groups = _normalization_candidate_groups(normalization_candidates)
     normalization_stats = _normalization_stats(session)
     status_context = _status_context(session)
     consult_lines = _consult_lines(session, query, status, date_from, date_to, priced, min_score) if active_page == "consult" else []
@@ -274,6 +275,7 @@ def _render_workspace(
             "reference_line_count": reference_line_count,
             "normalization_terms": normalization_terms,
             "normalization_candidates": normalization_candidates,
+            "normalization_candidate_groups": normalization_candidate_groups,
             "normalization_stats": normalization_stats,
             "selected_project": project or "",
             "selected_query": query or "",
@@ -1341,6 +1343,49 @@ def _normalization_candidate_lines(session: Session, limit: int = 120) -> list[B
         .order_by(BudgetLine.normalization_candidate.is_(None), BudgetLine.normalization_score.desc(), BudgetLine.id.desc())
         .limit(limit)
     ).unique().all()
+
+
+def _normalization_candidate_groups(lines: list[BudgetLine]) -> list[dict[str, object]]:
+    groups: dict[str, dict[str, object]] = {}
+    for line in lines:
+        label = (
+            line.normalization_candidate
+            or line.normalized_omschrijving
+            or line.omschrijving_werkzaamheden
+            or "Nieuwe term nodig"
+        ).strip()
+        key = normalization_key(label) or label.lower()
+        group = groups.setdefault(
+            key,
+            {
+                "label": label,
+                "lines": [],
+                "best_score": 0,
+                "methods": set(),
+            },
+        )
+        group["lines"].append(line)
+        group["best_score"] = max(int(group["best_score"]), int(line.normalization_score or 0))
+        if line.normalization_method:
+            group["methods"].add(line.normalization_method)
+
+    grouped = []
+    for group in groups.values():
+        group_lines = sorted(
+            group["lines"],
+            key=lambda item: (-(item.normalization_score or 0), item.line_number, item.id),
+        )
+        methods = sorted(str(method) for method in group["methods"])
+        grouped.append(
+            {
+                "label": group["label"],
+                "lines": group_lines,
+                "best_score": group["best_score"],
+                "method_label": ", ".join(methods) if methods else "raw",
+                "count": len(group_lines),
+            }
+        )
+    return sorted(grouped, key=lambda item: (-int(item["best_score"]), str(item["label"]).lower()))
 
 
 def _normalization_stats(session: Session) -> dict[str, int]:

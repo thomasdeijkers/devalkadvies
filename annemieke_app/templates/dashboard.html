@@ -346,44 +346,44 @@
         </div>
       </div>
       <div class="normalization-table suggestion-table">
-        {% if normalization_candidates %}
-          <div class="normalization-row normalization-head">
-            <span>Signaal</span>
-            <span>Voorstel</span>
-            <span>Bronregel</span>
-            <span>Project / bestand</span>
-            <span>Acties</span>
-          </div>
-          {% for line in normalization_candidates %}
-            {% set score_class = "high" if line.normalization_score >= 85 else "mid" if line.normalization_score >= 65 else "low" %}
-            {% set candidate = line.normalization_candidate or line.normalized_omschrijving or line.omschrijving_werkzaamheden %}
-            <div class="normalization-row">
-              <span><mark class="signal-pill {{ score_class }}">{{ line.normalization_score }}%</mark></span>
-              <span>
-                <strong>{{ candidate or "Nieuwe term nodig" }}</strong>
-                <small>{{ line.normalization_method or "raw" }}</small>
-              </span>
-              <span>{{ line.omschrijving_werkzaamheden }}</span>
-              <span>
-                {% if line.document %}
-                  {{ line.document.project.name if line.document.project else line.document.project_name or "Geen project" }}
-                  <small>{{ line.document.original_filename }}</small>
-                {% else %}
-                  -
-                {% endif %}
-              </span>
-              <span class="row-actions">
-                {% if line.normalization_candidate %}
-                  <form action="/normalisatie/suggesties/{{ line.id }}/validate" method="post">
-                    <button class="mini-button success" type="submit">Valideren</button>
-                  </form>
-                {% endif %}
-                <a class="mini-button" href="#suggestie-{{ line.id }}">Aanvullen</a>
-                {% if line.document %}
-                  <a class="mini-button" href="/documents/{{ line.document.id }}">Openen</a>
-                {% endif %}
-              </span>
-            </div>
+        {% if normalization_candidate_groups %}
+          {% for group in normalization_candidate_groups %}
+            {% set group_score_class = "high" if group.best_score >= 85 else "mid" if group.best_score >= 65 else "low" %}
+            <section class="suggestion-group">
+              <header class="suggestion-group-header">
+                <div>
+                  <mark class="signal-pill {{ group_score_class }}">{{ group.best_score }}%</mark>
+                  <strong>{{ group.label }}</strong>
+                  <small>{{ group.count }} bronregels - {{ group.method_label }}</small>
+                </div>
+              </header>
+              <div class="normalization-row normalization-head">
+                <span>Signaal</span>
+                <span>Bronregel</span>
+                <span>Acties</span>
+              </div>
+              {% for line in group.lines %}
+                {% set score_class = "high" if line.normalization_score >= 85 else "mid" if line.normalization_score >= 65 else "low" %}
+                <div class="normalization-row">
+                  <span><mark class="signal-pill {{ score_class }}">{{ line.normalization_score }}%</mark></span>
+                  <span>
+                    {{ line.omschrijving_werkzaamheden }}
+                    <small>{{ line.normalization_method or "raw" }}</small>
+                  </span>
+                  <span class="row-actions">
+                    {% if line.normalization_candidate %}
+                      <form action="/normalisatie/suggesties/{{ line.id }}/validate" method="post">
+                        <button class="mini-button success" type="submit">Valideren</button>
+                      </form>
+                    {% endif %}
+                    <a class="mini-button" href="#suggestie-{{ line.id }}">Aanvullen</a>
+                    {% if line.document %}
+                      <a class="mini-button" href="#referentie-{{ line.id }}">Referentie</a>
+                    {% endif %}
+                  </span>
+                </div>
+              {% endfor %}
+            </section>
           {% endfor %}
         {% else %}
           <div class="empty-state">
@@ -492,6 +492,18 @@
         {% endif %}
       </article>
     </div>
+    {% if line.document %}
+      <div id="referentie-{{ line.id }}" class="pdf-modal">
+        <a class="modal-backdrop" href="/normalisatie"></a>
+        <article class="pdf-panel">
+          <div class="pdf-header">
+            <strong>{{ line.document.original_filename }}</strong>
+            <a class="modal-close" href="/normalisatie">Sluiten</a>
+          </div>
+          <iframe src="/documents/{{ line.document.id }}/original.pdf" title="Originele referentie"></iframe>
+        </article>
+      </div>
+    {% endif %}
   {% endfor %}
   {% endif %}
 
