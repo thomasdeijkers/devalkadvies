@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -13,7 +13,7 @@ from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.orm import Session, aliased
 
 from .config import settings
-from .database import create_db, engine, get_session
+from .database import SessionLocal, create_db, engine, get_session
 from .exporter import budget_document_to_xlsx, control_model_document_to_xlsx, selected_budget_lines_to_xlsx
 from .index_provider import sync_price_index_series
 from .kengetallen import import_reference_lines
@@ -270,6 +270,7 @@ def original_pdf(document_id: int, session: Session = Depends(get_session)) -> F
 
 @app.post("/documents", response_class=HTMLResponse)
 async def upload_document(
+    background_tasks: BackgroundTasks,
     project_name: str = Form(""),
     project_id: str = Form(""),
     file: UploadFile = File(...),
@@ -283,50 +284,21 @@ async def upload_document(
     target_path = settings.upload_dir / stored_filename
     target_path.write_bytes(await file.read())
 
-    parsed = parse_pdf(target_path)
     selected_project = session.get(Project, _int_or_none(project_id)) if _int_or_none(project_id) else None
     document = IncomingDocument(
         original_filename=file.filename,
         stored_filename=stored_filename,
         project_id=selected_project.id if selected_project else None,
         project_name=project_name.strip() or None,
-        status="needs_review",
-        source=parsed.parse_method,
-        parsed_text=parsed.text,
-        parser_notes=_parser_note(parsed),
+        status="processing",
+        source="upload",
+        parsed_text="",
+        parser_notes="Upload ontvangen. Parser loopt op de achtergrond.",
     )
-    document.fields = [
-        ExtractedField(field_name=field.name, field_value=field.value, confidence=field.confidence)
-        for field in parsed.fields
-    ]
-    document.budget_lines = [
-        BudgetLine(
-            line_number=line.line_number,
-            regel_type=line.regel_type,
-            niveau=line.niveau,
-            hoofdstuk_code=line.hoofdstuk_code,
-            hoofdstuk_omschrijving=line.hoofdstuk_omschrijving,
-            post_code=line.post_code,
-            omschrijving_werkzaamheden=line.omschrijving_werkzaamheden,
-            hoeveelheid=line.hoeveelheid,
-            eenheid=line.eenheid,
-            norm_arbeid=line.norm_arbeid,
-            uren=line.uren,
-            materiaal=line.materiaal,
-            materieel=line.materieel,
-            onderaannemer=line.onderaannemer,
-            totaal_prijs_per_regel=line.totaal_prijs_per_regel,
-            eenheidsprijs=line.eenheidsprijs,
-            bron_pagina=line.bron_pagina,
-            confidence=line.confidence,
-            raw_text=line.raw_text,
-        )
-        for line in parsed.budget_lines
-    ]
 
     session.add(document)
     session.commit()
-    _record_openai_usage(session, "budget_upload", document.id, parsed.openai_usage)
+    background_tasks.add_task(_parse_document_background, document.id, "budget_upload")
 
     return RedirectResponse(f"/documents/{document.id}", status_code=303)
 
@@ -433,6 +405,7 @@ async def create_assessment_template(
 
 @app.post("/beoordeling/upload")
 async def upload_assessment_input(
+    background_tasks: BackgroundTasks,
     project_name: str = Form(""),
     project_id: str = Form(""),
     template_id: str = Form(""),
@@ -455,44 +428,20 @@ async def upload_assessment_input(
         stored_filename=stored_filename,
         project_id=selected_project.id if selected_project else None,
         project_name=project_name.strip() or None,
-        status="needs_review",
+        status="processing" if suffix == ".pdf" else "needs_review",
         document_type="begroting_beoordeling",
         source="excel" if suffix in {".xlsx", ".xlsm"} else "pdf",
-        parser_notes=_assessment_note(template_id, reference_dataset_id),
+        parser_notes=(
+            f"{_assessment_note(template_id, reference_dataset_id)} | Upload ontvangen. Parser loopt op de achtergrond."
+            if suffix == ".pdf"
+            else _assessment_note(template_id, reference_dataset_id)
+        ),
     )
     if suffix == ".pdf":
-        parsed = parse_pdf(target_path)
-        document.source = parsed.parse_method
-        document.parsed_text = parsed.text
-        document.parser_notes = f"{_assessment_note(template_id, reference_dataset_id)} | {_parser_note(parsed)}"
-        document.fields = [
-            ExtractedField(field_name=field.name, field_value=field.value, confidence=field.confidence)
-            for field in parsed.fields
-        ]
-        document.budget_lines = [
-            BudgetLine(
-                line_number=line.line_number,
-                regel_type=line.regel_type,
-                niveau=line.niveau,
-                hoofdstuk_code=line.hoofdstuk_code,
-                hoofdstuk_omschrijving=line.hoofdstuk_omschrijving,
-                post_code=line.post_code,
-                omschrijving_werkzaamheden=line.omschrijving_werkzaamheden,
-                hoeveelheid=line.hoeveelheid,
-                eenheid=line.eenheid,
-                norm_arbeid=line.norm_arbeid,
-                uren=line.uren,
-                materiaal=line.materiaal,
-                materieel=line.materieel,
-                onderaannemer=line.onderaannemer,
-                totaal_prijs_per_regel=line.totaal_prijs_per_regel,
-                eenheidsprijs=line.eenheidsprijs,
-                bron_pagina=line.bron_pagina,
-                confidence=line.confidence,
-                raw_text=line.raw_text,
-            )
-            for line in parsed.budget_lines
-        ]
+        session.add(document)
+        session.commit()
+        background_tasks.add_task(_parse_document_background, document.id, "assessment_upload")
+        return RedirectResponse(f"/documents/{document.id}", status_code=303)
     else:
         imported_lines = import_reference_lines(target_path)
         document.parsed_text = "\n".join(line.raw_text for line in imported_lines[:500])
@@ -525,8 +474,6 @@ async def upload_assessment_input(
         _normalize_line_prices(line)
     session.add(document)
     session.commit()
-    if suffix == ".pdf":
-        _record_openai_usage(session, "assessment_upload", document.id, parsed.openai_usage)
     return RedirectResponse(f"/documents/{document.id}", status_code=303)
 
 
@@ -729,6 +676,7 @@ def run_scheduled_job(job_id: int, session: Session = Depends(get_session)) -> R
 
 @app.post("/documents/{document_id}/reparse-openai")
 def reparse_document_with_openai(
+    background_tasks: BackgroundTasks,
     document_id: int,
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
@@ -736,42 +684,10 @@ def reparse_document_with_openai(
     if document is None:
         raise HTTPException(status_code=404, detail="Document niet gevonden.")
 
-    file_path = settings.upload_dir / document.stored_filename
-    parsed = parse_pdf(file_path, force_openai=True)
-    document.source = parsed.parse_method
-    document.parsed_text = parsed.text
-    document.parser_notes = _parser_note(parsed)
-    document.status = "needs_review"
-    document.fields = [
-        ExtractedField(field_name=field.name, field_value=field.value, confidence=field.confidence)
-        for field in parsed.fields
-    ]
-    document.budget_lines = [
-        BudgetLine(
-            line_number=line.line_number,
-            regel_type=line.regel_type,
-            niveau=line.niveau,
-            hoofdstuk_code=line.hoofdstuk_code,
-            hoofdstuk_omschrijving=line.hoofdstuk_omschrijving,
-            post_code=line.post_code,
-            omschrijving_werkzaamheden=line.omschrijving_werkzaamheden,
-            hoeveelheid=line.hoeveelheid,
-            eenheid=line.eenheid,
-            norm_arbeid=line.norm_arbeid,
-            uren=line.uren,
-            materiaal=line.materiaal,
-            materieel=line.materieel,
-            onderaannemer=line.onderaannemer,
-            totaal_prijs_per_regel=line.totaal_prijs_per_regel,
-            eenheidsprijs=line.eenheidsprijs,
-            bron_pagina=line.bron_pagina,
-            confidence=line.confidence,
-            raw_text=line.raw_text,
-        )
-        for line in parsed.budget_lines
-    ]
+    document.status = "processing"
+    document.parser_notes = "OpenAI herparse gestart. Parser loopt op de achtergrond."
     session.commit()
-    _record_openai_usage(session, "budget_reparse", document.id, parsed.openai_usage)
+    background_tasks.add_task(_parse_document_background, document.id, "budget_reparse", True)
     return RedirectResponse(f"/documents/{document.id}", status_code=303)
 
 
@@ -1205,6 +1121,83 @@ def _consult_lines(
     return session.scalars(
         statement.order_by(IncomingDocument.created_at.desc(), BudgetLine.line_number).limit(limit)
     ).unique().all()
+
+
+def _parse_document_background(document_id: int, usage_source: str, force_openai: bool = False) -> None:
+    session = SessionLocal()
+    try:
+        document = session.get(IncomingDocument, document_id)
+        if document is None:
+            return
+        file_path = settings.upload_dir / document.stored_filename
+        if not file_path.exists():
+            document.status = "parse_error"
+            document.parser_notes = "Parser fout: bestand niet gevonden op de server."
+            session.commit()
+            return
+
+        parsed = parse_pdf(file_path, force_openai=force_openai)
+        document.source = parsed.parse_method
+        document.parsed_text = parsed.text
+        document.parser_notes = _merge_parser_notes(document.parser_notes, _parser_note(parsed))
+        document.status = "needs_review"
+        document.fields = [
+            ExtractedField(field_name=field.name, field_value=field.value, confidence=field.confidence)
+            for field in parsed.fields
+        ]
+        document.budget_lines = [_budget_line_from_parsed(line) for line in parsed.budget_lines]
+        for line in document.budget_lines:
+            _normalize_line_prices(line)
+        session.commit()
+        _record_openai_usage(session, usage_source, document.id, parsed.openai_usage)
+    except Exception as exc:
+        session.rollback()
+        document = session.get(IncomingDocument, document_id)
+        if document is not None:
+            document.status = "parse_error"
+            document.parser_notes = f"Parser fout: {str(exc)[:500]}"
+            session.commit()
+    finally:
+        session.close()
+
+
+def _budget_line_from_parsed(line) -> BudgetLine:
+    return BudgetLine(
+        line_number=line.line_number,
+        regel_type=line.regel_type,
+        niveau=line.niveau,
+        hoofdstuk_code=line.hoofdstuk_code,
+        hoofdstuk_omschrijving=line.hoofdstuk_omschrijving,
+        post_code=line.post_code,
+        omschrijving_werkzaamheden=line.omschrijving_werkzaamheden,
+        hoeveelheid=line.hoeveelheid,
+        eenheid=line.eenheid,
+        norm_arbeid=line.norm_arbeid,
+        uren=line.uren,
+        materiaal=line.materiaal,
+        materieel=line.materieel,
+        onderaannemer=line.onderaannemer,
+        totaal_prijs_per_regel=line.totaal_prijs_per_regel,
+        eenheidsprijs=line.eenheidsprijs,
+        bron_pagina=line.bron_pagina,
+        confidence=line.confidence,
+        raw_text=line.raw_text,
+    )
+
+
+def _merge_parser_notes(existing: str | None, parsed_note: str | None) -> str | None:
+    keep = []
+    for part in (existing or "").split("|"):
+        cleaned = part.strip()
+        if not cleaned:
+            continue
+        lowered = cleaned.lower()
+        if "parser loopt" in lowered or "upload ontvangen" in lowered or "herparse gestart" in lowered:
+            continue
+        keep.append(cleaned)
+    if parsed_note:
+        keep.append(parsed_note)
+    return " | ".join(dict.fromkeys(keep)) if keep else None
 
 
 def _latest_template(session: Session) -> AssessmentTemplate | None:

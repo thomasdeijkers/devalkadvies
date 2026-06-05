@@ -1028,6 +1028,16 @@ textarea {
   background: var(--green);
 }
 
+.status.processing {
+  color: #061e2a;
+  background: var(--accent);
+}
+
+.status.parse_error {
+  color: #fff;
+  background: #d94b35;
+}
+
 .empty-state {
   display: grid;
   gap: 6px;

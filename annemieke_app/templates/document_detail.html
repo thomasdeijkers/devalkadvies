@@ -16,13 +16,19 @@
     {% if document.parser_notes %}
       <p class="note">{{ document.parser_notes }}</p>
     {% endif %}
+    {% if document.status == "processing" %}
+      <p class="note">De parser is nog bezig. Deze pagina ververst automatisch.</p>
+      <script>window.setTimeout(function () { window.location.reload(); }, 5000);</script>
+    {% endif %}
 
     <form action="/documents/{{ document.id }}/status" method="post" class="status-form">
       <button name="status" value="needs_review" type="submit">Te controleren</button>
       <button name="status" value="archived" type="submit">Archiveren</button>
-      <a class="button-link" href="/documents/{{ document.id }}/export.xlsx">Excel</a>
-      <a class="button-link" href="/documents/{{ document.id }}/controlemodel.xlsx">Controlemodel</a>
-      <a class="button-link" href="/documents/{{ document.id }}/screening.xlsx">Screening export</a>
+      {% if document.status != "processing" %}
+        <a class="button-link" href="/documents/{{ document.id }}/export.xlsx">Excel</a>
+        <a class="button-link" href="/documents/{{ document.id }}/controlemodel.xlsx">Controlemodel</a>
+        <a class="button-link" href="/documents/{{ document.id }}/screening.xlsx">Screening export</a>
+      {% endif %}
     </form>
     <form action="/documents/{{ document.id }}/reparse-openai" method="post" class="status-form">
       <button type="submit">Opnieuw parsen met OpenAI</button>
