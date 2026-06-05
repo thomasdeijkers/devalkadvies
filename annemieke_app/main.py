@@ -304,7 +304,12 @@ def original_pdf(document_id: int, session: Session = Depends(get_session)) -> F
     file_path = settings.upload_dir / document.stored_filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="PDF niet gevonden.")
-    return FileResponse(file_path, media_type="application/pdf", filename=document.original_filename)
+    return FileResponse(
+        file_path,
+        media_type="application/pdf",
+        filename=document.original_filename,
+        content_disposition_type="inline",
+    )
 
 
 @app.post("/documents", response_class=HTMLResponse)
