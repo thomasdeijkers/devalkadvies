@@ -440,6 +440,64 @@ button:hover {
   transition: width 0.55s ease;
 }
 
+.parser-status-card {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid rgba(83, 180, 206, 0.46);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(13, 52, 82, 0.96), rgba(23, 73, 98, 0.82));
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.24);
+}
+
+.parser-status-head {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.parser-status-head strong,
+.parser-status-head small {
+  display: block;
+}
+
+.parser-status-head strong {
+  color: #fff;
+  font-size: 15px;
+}
+
+.parser-status-head small,
+.parser-status-card p {
+  color: var(--soft);
+}
+
+.parser-status-card p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.parser-status-head b {
+  color: #fff;
+  font-size: 18px;
+}
+
+.parser-spinner {
+  width: 26px;
+  height: 26px;
+  border: 3px solid rgba(255, 255, 255, 0.22);
+  border-top-color: var(--accent);
+  border-radius: 999px;
+  animation: parser-spin 0.9s linear infinite;
+}
+
+@keyframes parser-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .input-overview {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1043,6 +1101,11 @@ textarea {
   gap: 6px;
   padding: 24px;
   color: var(--muted);
+}
+
+.parser-wait-state {
+  border: 1px dashed rgba(83, 180, 206, 0.55);
+  background: rgba(83, 180, 206, 0.08);
 }
 
 .empty-state strong {

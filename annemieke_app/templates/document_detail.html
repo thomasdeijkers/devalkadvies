@@ -17,8 +17,54 @@
       <p class="note">{{ document.parser_notes }}</p>
     {% endif %}
     {% if document.status == "processing" %}
-      <p class="note">De parser is nog bezig. Deze pagina ververst automatisch.</p>
-      <script>window.setTimeout(function () { window.location.reload(); }, 5000);</script>
+      <div class="parser-status-card" data-document-progress data-document-id="{{ document.id }}">
+        <div class="parser-status-head">
+          <span class="parser-spinner" aria-hidden="true"></span>
+          <div>
+            <strong data-progress-stage>{{ document.parser_stage or "Parser gestart" }}</strong>
+            <small data-progress-detail>{{ document.budget_lines|length }} regels gevonden</small>
+          </div>
+          <b data-progress-percent>{{ document.parser_progress or 5 }}%</b>
+        </div>
+        <div class="progress-track">
+          <i data-progress-bar style="width: {{ document.parser_progress or 5 }}%"></i>
+        </div>
+        <p data-progress-note>{{ document.parser_notes or "De parser loopt op de achtergrond." }}</p>
+      </div>
+      <script>
+        (function () {
+          const root = document.querySelector("[data-document-progress]");
+          if (!root) return;
+          const id = root.dataset.documentId;
+          const stage = root.querySelector("[data-progress-stage]");
+          const detail = root.querySelector("[data-progress-detail]");
+          const percent = root.querySelector("[data-progress-percent]");
+          const bar = root.querySelector("[data-progress-bar]");
+          const note = root.querySelector("[data-progress-note]");
+
+          async function poll() {
+            try {
+              const response = await fetch(`/api/documents/${id}`, { cache: "no-store" });
+              if (!response.ok) return;
+              const data = await response.json();
+              const value = Math.max(5, Math.min(100, Number(data.parser_progress || 0)));
+              stage.textContent = data.parser_stage || data.status || "Parser loopt";
+              detail.textContent = `${data.line_count || 0} regels gevonden`;
+              percent.textContent = `${value}%`;
+              bar.style.width = `${value}%`;
+              note.textContent = data.parser_notes || "";
+              if (data.status !== "processing") {
+                window.setTimeout(function () { window.location.reload(); }, 900);
+              }
+            } catch (error) {
+              // Laat de bestaande status staan; de volgende poll probeert opnieuw.
+            }
+          }
+
+          poll();
+          window.setInterval(poll, 2500);
+        })();
+      </script>
     {% endif %}
 
     <form action="/documents/{{ document.id }}/status" method="post" class="status-form">
@@ -31,7 +77,7 @@
       {% endif %}
     </form>
     <form action="/documents/{{ document.id }}/reparse-openai" method="post" class="status-form">
-      <button type="submit">Opnieuw parsen met OpenAI</button>
+      <button type="submit">{% if document.status == "processing" %}Parser opnieuw starten{% else %}Opnieuw parsen met OpenAI{% endif %}</button>
     </form>
 
     <form action="/documents/{{ document.id }}/meta" method="post" class="meta-form">
@@ -74,7 +120,12 @@
         </select>
       </div>
     </div>
-    {% if document.budget_lines %}
+    {% if document.status == "processing" %}
+      <div class="empty-state parser-wait-state">
+        <strong>Begrotingsregels worden opgebouwd</strong>
+        <span>De regels verschijnen automatisch zodra de parser klaar is.</span>
+      </div>
+    {% elif document.budget_lines %}
       <form action="/documents/{{ document.id }}/budget-lines/bulk" method="post" class="budget-edit-form">
         <div class="budget-actions">
           <span>{{ document.budget_lines|length }} regels gevonden</span>

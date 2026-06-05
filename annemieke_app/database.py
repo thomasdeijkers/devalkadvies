@@ -41,6 +41,12 @@ def _apply_lightweight_migrations() -> None:
     if "project_id" not in document_columns:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE incoming_documents ADD COLUMN project_id INTEGER"))
+    if "parser_stage" not in document_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE incoming_documents ADD COLUMN parser_stage VARCHAR(180)"))
+    if "parser_progress" not in document_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE incoming_documents ADD COLUMN parser_progress INTEGER DEFAULT 0"))
 
     if "budget_lines" in inspector.get_table_names():
         budget_line_columns = {column["name"] for column in inspector.get_columns("budget_lines")}

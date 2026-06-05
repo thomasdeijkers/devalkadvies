@@ -294,6 +294,8 @@ async def upload_document(
         source="upload",
         parsed_text="",
         parser_notes="Upload ontvangen. Parser loopt op de achtergrond.",
+        parser_stage="Upload ontvangen",
+        parser_progress=5,
     )
 
     session.add(document)
@@ -436,6 +438,8 @@ async def upload_assessment_input(
             if suffix == ".pdf"
             else _assessment_note(template_id, reference_dataset_id)
         ),
+        parser_stage="Upload ontvangen" if suffix == ".pdf" else "Excel verwerkt",
+        parser_progress=5 if suffix == ".pdf" else 100,
     )
     if suffix == ".pdf":
         session.add(document)
@@ -686,6 +690,8 @@ def reparse_document_with_openai(
 
     document.status = "processing"
     document.parser_notes = "OpenAI herparse gestart. Parser loopt op de achtergrond."
+    document.parser_stage = "OpenAI herparse gestart"
+    document.parser_progress = 5
     session.commit()
     background_tasks.add_task(_parse_document_background, document.id, "budget_reparse", True)
     return RedirectResponse(f"/documents/{document.id}", status_code=303)
@@ -1029,6 +1035,11 @@ def document_json(document_id: int, session: Session = Depends(get_session)) -> 
         "project_name": document.project_name,
         "status": document.status,
         "document_type": document.document_type,
+        "parser_stage": document.parser_stage or "",
+        "parser_progress": document.parser_progress or 0,
+        "parser_notes": document.parser_notes or "",
+        "line_count": len(document.budget_lines),
+        "parsed_text_available": bool(document.parsed_text),
         "fields": [
             {
                 "name": field.field_name,
@@ -1129,25 +1140,33 @@ def _parse_document_background(document_id: int, usage_source: str, force_openai
         document = session.get(IncomingDocument, document_id)
         if document is None:
             return
+        _set_parse_progress(session, document, 12, "Bestand voorbereiden")
         file_path = settings.upload_dir / document.stored_filename
         if not file_path.exists():
             document.status = "parse_error"
             document.parser_notes = "Parser fout: bestand niet gevonden op de server."
+            document.parser_stage = "Bestand niet gevonden"
+            document.parser_progress = 100
             session.commit()
             return
 
+        _set_parse_progress(session, document, 28, "PDF lezen, OCR/OpenAI voorbereiden")
         parsed = parse_pdf(file_path, force_openai=force_openai)
+        _set_parse_progress(session, document, 76, f"{len(parsed.budget_lines)} regels herkend")
         document.source = parsed.parse_method
         document.parsed_text = parsed.text
         document.parser_notes = _merge_parser_notes(document.parser_notes, _parser_note(parsed))
-        document.status = "needs_review"
         document.fields = [
             ExtractedField(field_name=field.name, field_value=field.value, confidence=field.confidence)
             for field in parsed.fields
         ]
+        _set_parse_progress(session, document, 88, "Begrotingsregels opslaan")
         document.budget_lines = [_budget_line_from_parsed(line) for line in parsed.budget_lines]
         for line in document.budget_lines:
             _normalize_line_prices(line)
+        document.status = "needs_review"
+        document.parser_stage = "Klaar voor controle"
+        document.parser_progress = 100
         session.commit()
         _record_openai_usage(session, usage_source, document.id, parsed.openai_usage)
     except Exception as exc:
@@ -1156,9 +1175,18 @@ def _parse_document_background(document_id: int, usage_source: str, force_openai
         if document is not None:
             document.status = "parse_error"
             document.parser_notes = f"Parser fout: {str(exc)[:500]}"
+            document.parser_stage = "Parser fout"
+            document.parser_progress = 100
             session.commit()
     finally:
         session.close()
+
+
+def _set_parse_progress(session: Session, document: IncomingDocument, progress: int, stage: str) -> None:
+    document.status = "processing"
+    document.parser_progress = max(0, min(100, progress))
+    document.parser_stage = stage
+    session.commit()
 
 
 def _budget_line_from_parsed(line) -> BudgetLine:
