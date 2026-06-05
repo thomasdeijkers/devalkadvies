@@ -21,6 +21,7 @@
       <button name="status" value="needs_review" type="submit">Te controleren</button>
       <button name="status" value="archived" type="submit">Archiveren</button>
       <a class="button-link" href="/documents/{{ document.id }}/export.xlsx">Excel</a>
+      <a class="button-link" href="/documents/{{ document.id }}/controlemodel.xlsx">Controlemodel</a>
     </form>
     <form action="/documents/{{ document.id }}/reparse-openai" method="post" class="status-form">
       <button type="submit">Opnieuw parsen met OpenAI</button>

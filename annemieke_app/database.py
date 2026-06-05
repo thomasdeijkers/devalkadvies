@@ -45,15 +45,36 @@ def _apply_lightweight_migrations() -> None:
     if "budget_lines" in inspector.get_table_names():
         budget_line_columns = {column["name"] for column in inspector.get_columns("budget_lines")}
         budget_line_migrations = {
+            "regel_type": "ALTER TABLE budget_lines ADD COLUMN regel_type VARCHAR(40) DEFAULT 'regel'",
+            "niveau": "ALTER TABLE budget_lines ADD COLUMN niveau INTEGER DEFAULT 0",
+            "hoofdstuk_code": "ALTER TABLE budget_lines ADD COLUMN hoofdstuk_code VARCHAR(80)",
+            "hoofdstuk_omschrijving": "ALTER TABLE budget_lines ADD COLUMN hoofdstuk_omschrijving TEXT",
+            "post_code": "ALTER TABLE budget_lines ADD COLUMN post_code VARCHAR(80)",
             "price_index_series_id": "ALTER TABLE budget_lines ADD COLUMN price_index_series_id INTEGER",
             "base_price_date": "ALTER TABLE budget_lines ADD COLUMN base_price_date TIMESTAMP",
             "indexed_eenheidsprijs": "ALTER TABLE budget_lines ADD COLUMN indexed_eenheidsprijs NUMERIC(14, 2)",
             "indexed_totaal_prijs_per_regel": (
                 "ALTER TABLE budget_lines ADD COLUMN indexed_totaal_prijs_per_regel NUMERIC(14, 2)"
             ),
+            "bron_pagina": "ALTER TABLE budget_lines ADD COLUMN bron_pagina INTEGER",
         }
         for column_name, statement in budget_line_migrations.items():
             if column_name not in budget_line_columns:
+                with engine.begin() as connection:
+                    connection.execute(text(statement))
+
+    if "reference_lines" in inspector.get_table_names():
+        reference_line_columns = {column["name"] for column in inspector.get_columns("reference_lines")}
+        reference_line_migrations = {
+            "regel_type": "ALTER TABLE reference_lines ADD COLUMN regel_type VARCHAR(40) DEFAULT 'regel'",
+            "niveau": "ALTER TABLE reference_lines ADD COLUMN niveau INTEGER DEFAULT 0",
+            "hoofdstuk_code": "ALTER TABLE reference_lines ADD COLUMN hoofdstuk_code VARCHAR(80)",
+            "hoofdstuk_omschrijving": "ALTER TABLE reference_lines ADD COLUMN hoofdstuk_omschrijving TEXT",
+            "post_code": "ALTER TABLE reference_lines ADD COLUMN post_code VARCHAR(80)",
+            "bron_pagina": "ALTER TABLE reference_lines ADD COLUMN bron_pagina INTEGER",
+        }
+        for column_name, statement in reference_line_migrations.items():
+            if column_name not in reference_line_columns:
                 with engine.begin() as connection:
                     connection.execute(text(statement))
 

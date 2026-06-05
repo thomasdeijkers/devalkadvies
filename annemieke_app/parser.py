@@ -42,6 +42,11 @@ class ParsedPdf:
 class ParsedBudgetLine:
     line_number: int
     omschrijving_werkzaamheden: str
+    regel_type: str = "regel"
+    niveau: int = 0
+    hoofdstuk_code: str | None = None
+    hoofdstuk_omschrijving: str | None = None
+    post_code: str | None = None
     hoeveelheid: Decimal | None = None
     eenheid: str | None = None
     norm_arbeid: Decimal | None = None
@@ -51,6 +56,7 @@ class ParsedBudgetLine:
     onderaannemer: Decimal | None = None
     totaal_prijs_per_regel: Decimal | None = None
     eenheidsprijs: Decimal | None = None
+    bron_pagina: int | None = None
     confidence: int = 45
     raw_text: str = ""
 
@@ -121,9 +127,27 @@ def _normalize_key(raw_key: str) -> str:
 
 def extract_budget_lines(text: str) -> list[ParsedBudgetLine]:
     lines: list[ParsedBudgetLine] = []
+    current_chapter_code: str | None = None
+    current_chapter_description: str | None = None
 
     for raw_line in _candidate_budget_rows(text):
         normalized = " ".join(raw_line.split())
+        chapter = _chapter_from_line(normalized)
+        if chapter:
+            current_chapter_code, current_chapter_description = chapter
+            lines.append(
+                ParsedBudgetLine(
+                    line_number=len(lines) + 1,
+                    omschrijving_werkzaamheden=current_chapter_description,
+                    regel_type="hoofdstuk",
+                    niveau=0,
+                    hoofdstuk_code=current_chapter_code,
+                    hoofdstuk_omschrijving=current_chapter_description,
+                    confidence=75,
+                    raw_text=normalized,
+                )
+            )
+            continue
         if not _looks_like_budget_line(normalized):
             continue
 
@@ -153,6 +177,11 @@ def extract_budget_lines(text: str) -> list[ParsedBudgetLine]:
             ParsedBudgetLine(
                 line_number=len(lines) + 1,
                 omschrijving_werkzaamheden=description,
+                regel_type="regel",
+                niveau=1 if current_chapter_code else 0,
+                hoofdstuk_code=current_chapter_code,
+                hoofdstuk_omschrijving=current_chapter_description,
+                post_code=_post_code_from_line(normalized),
                 hoeveelheid=quantity,
                 eenheid=unit,
                 norm_arbeid=norm_arbeid,
@@ -166,6 +195,23 @@ def extract_budget_lines(text: str) -> list[ParsedBudgetLine]:
     return lines
 
 
+def _chapter_from_line(line: str) -> tuple[str | None, str] | None:
+    if len(line) > 120 or len(MONEY_PATTERN.findall(line)) > 0:
+        return None
+    match = re.match(r"^(?P<code>(?:\\d+[.)]?|[A-Z]\\d{0,3}|\\d{2,}(?:\\.\\d+)*))\\s+(?P<title>[A-Za-zÀ-ÿ].+)$", line)
+    if not match:
+        return None
+    title = match.group("title").strip(" :-")
+    if len(title) < 3:
+        return None
+    return match.group("code").strip(".)"), title
+
+
+def _post_code_from_line(line: str) -> str | None:
+    match = re.match(r"^(?P<code>\\d+(?:\\.\\d+)*|[A-Z]{1,3}\\d+(?:\\.\\d+)*)\\s+", line)
+    return match.group("code") if match else None
+
+
 def _candidate_budget_rows(text: str) -> list[str]:
     rows: list[str] = []
     pending = ""
@@ -176,6 +222,13 @@ def _candidate_budget_rows(text: str) -> list[str]:
             pending = ""
             continue
         if _is_table_noise(line):
+            continue
+
+        if _chapter_from_line(line):
+            if pending and _looks_like_budget_line(pending):
+                rows.append(pending)
+            rows.append(line)
+            pending = ""
             continue
 
         candidate = f"{pending} {line}".strip() if pending else line
@@ -289,12 +342,17 @@ def _parse_budget_with_openai(path: Path, text: str) -> ParsedPdf | None:
         {
             "type": "input_text",
             "text": (
-                "Parseer deze Nederlandse bouwbegroting naar begrotingsregels. "
-                "Haal zo veel mogelijk echte begrotingsregels uit alle pagina's. "
+                "Parseer deze Nederlandse bouwbegroting naar een controlemodel voor bouwkostenadvies. "
+                "Behoud de begrotingsstructuur: hoofdstukken, posten, subposten en regels moeten in dezelfde volgorde blijven staan. "
+                "Neem hoofdstukken/tussenkoppen op als regel_type='hoofdstuk' of 'post', ook als er geen bedragen in staan. "
+                "Voeg omschrijvingen die over meerdere regels lopen samen tot één duidelijke omschrijving. "
                 "Sla regels niet over omdat een kolom leeg is; zet onbekende kolommen op null. "
-                "Negeer kopregels, tussenkoppen, paginanummers en totalen zonder omschrijving. "
-                "Kolommen: omschrijving_werkzaamheden, hoeveelheid, eenheid, norm_arbeid, uren, "
-                "materiaal, materieel, onderaannemer, eenheidsprijs, totaal_prijs_per_regel. "
+                "Negeer alleen paginanummers, kop-/voetteksten en pure tabelheaders. "
+                "Kolommen: regel_type, niveau, hoofdstuk_code, hoofdstuk_omschrijving, post_code, "
+                "omschrijving_werkzaamheden, hoeveelheid, eenheid, norm_arbeid, uren, materiaal, materieel, "
+                "onderaannemer, eenheidsprijs, totaal_prijs_per_regel, bron_pagina. "
+                "Zet arbeidsnormen in norm_arbeid, arbeidsuren in uren, materiaalbedragen in materiaal, "
+                "materieelbedragen in materieel, onderaannemersbedragen in onderaannemer en eindprijzen in totaal_prijs_per_regel. "
                 "Gebruik decimalen als getal zonder duizendtallen. Laat onbekende waarden null. "
                 "Brontekst:\n\n" + text[:50000]
             ),
@@ -351,6 +409,11 @@ def _openai_schema() -> dict:
         "type": "object",
         "additionalProperties": False,
         "properties": {
+            "regel_type": {"type": "string", "enum": ["hoofdstuk", "post", "regel", "subtotaal", "totaal"]},
+            "niveau": {"type": "number", "minimum": 0, "maximum": 8},
+            "hoofdstuk_code": nullable_string,
+            "hoofdstuk_omschrijving": nullable_string,
+            "post_code": nullable_string,
             "omschrijving_werkzaamheden": {"type": "string"},
             "hoeveelheid": nullable_number,
             "eenheid": nullable_string,
@@ -361,9 +424,15 @@ def _openai_schema() -> dict:
             "onderaannemer": nullable_number,
             "eenheidsprijs": nullable_number,
             "totaal_prijs_per_regel": nullable_number,
+            "bron_pagina": nullable_number,
             "confidence": {"type": "number", "minimum": 0, "maximum": 100},
         },
         "required": [
+            "regel_type",
+            "niveau",
+            "hoofdstuk_code",
+            "hoofdstuk_omschrijving",
+            "post_code",
             "omschrijving_werkzaamheden",
             "hoeveelheid",
             "eenheid",
@@ -374,6 +443,7 @@ def _openai_schema() -> dict:
             "onderaannemer",
             "eenheidsprijs",
             "totaal_prijs_per_regel",
+            "bron_pagina",
             "confidence",
         ],
     }
@@ -404,6 +474,11 @@ def _normalize_openai_budget_lines(data: dict) -> list[ParsedBudgetLine]:
             ParsedBudgetLine(
                 line_number=len(lines) + 1,
                 omschrijving_werkzaamheden=description,
+                regel_type=str(raw.get("regel_type") or "regel").strip() or "regel",
+                niveau=_to_int(raw.get("niveau")) or 0,
+                hoofdstuk_code=str(raw.get("hoofdstuk_code") or "").strip() or None,
+                hoofdstuk_omschrijving=str(raw.get("hoofdstuk_omschrijving") or "").strip() or None,
+                post_code=str(raw.get("post_code") or "").strip() or None,
                 hoeveelheid=_to_decimal(str(raw.get("hoeveelheid"))) if raw.get("hoeveelheid") is not None else None,
                 eenheid=str(raw.get("eenheid") or "").strip() or None,
                 norm_arbeid=_to_decimal(str(raw.get("norm_arbeid"))) if raw.get("norm_arbeid") is not None else None,
@@ -413,11 +488,24 @@ def _normalize_openai_budget_lines(data: dict) -> list[ParsedBudgetLine]:
                 onderaannemer=_to_decimal(str(raw.get("onderaannemer"))) if raw.get("onderaannemer") is not None else None,
                 eenheidsprijs=_to_decimal(str(raw.get("eenheidsprijs"))) if raw.get("eenheidsprijs") is not None else None,
                 totaal_prijs_per_regel=_to_decimal(str(raw.get("totaal_prijs_per_regel"))) if raw.get("totaal_prijs_per_regel") is not None else None,
+                bron_pagina=_to_int(raw.get("bron_pagina")),
                 confidence=max(0, min(100, int(raw.get("confidence") or 75))),
                 raw_text="openai",
             )
         )
     return lines
+
+
+def _to_int(value) -> int | None:
+    if value is None:
+        return None
+    decimal_value = _to_decimal(str(value))
+    if decimal_value is None:
+        return None
+    try:
+        return int(decimal_value)
+    except (InvalidOperation, ValueError):
+        return None
 
 
 def _page_image_data_urls(path: Path) -> list[str]:

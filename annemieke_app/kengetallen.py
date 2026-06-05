@@ -12,6 +12,11 @@ from openpyxl import load_workbook
 @dataclass
 class ImportedReferenceLine:
     line_number: int
+    regel_type: str
+    niveau: int
+    hoofdstuk_code: str | None
+    hoofdstuk_omschrijving: str | None
+    post_code: str | None
     project_name: str | None
     relation_name: str | None
     document_date: datetime | None
@@ -25,6 +30,7 @@ class ImportedReferenceLine:
     onderaannemer: Decimal | None
     totaal_prijs_per_regel: Decimal | None
     eenheidsprijs: Decimal | None
+    bron_pagina: int | None
     confidence: int
     raw_text: str
 
@@ -33,6 +39,11 @@ HEADER_ALIASES = {
     "project_name": {"project", "projectnaam", "projectomschrijving"},
     "relation_name": {"relatie", "opdrachtgever", "klant", "client"},
     "document_date": {"datum", "documentdatum", "peildatum", "prijsdatum"},
+    "regel_type": {"regeltype", "regel_type", "type"},
+    "niveau": {"niveau", "level"},
+    "hoofdstuk_code": {"hoofdstuk", "hoofdstukcode", "hoofdstuk_code"},
+    "hoofdstuk_omschrijving": {"hoofdstukomschrijving", "hoofdstuk_omschrijving"},
+    "post_code": {"post", "postcode", "post_code"},
     "omschrijving_werkzaamheden": {"omschrijving", "werkzaamheden", "omschrijving/ werkzaamheden", "post", "activiteit"},
     "hoeveelheid": {"hvh", "hoeveelheid", "aantal"},
     "eenheid": {"ehd", "eenheid", "unit"},
@@ -43,6 +54,7 @@ HEADER_ALIASES = {
     "onderaannemer": {"o.a.", "oa", "onderaannemer"},
     "totaal_prijs_per_regel": {"totaal", "totaal prijs per regel", "totaalprijs", "eindprijs"},
     "eenheidsprijs": {"eenheidsprijs", "ehprijs", "prijs/eenheid", "prijs per eenheid"},
+    "bron_pagina": {"pagina", "bronpagina", "bron_pagina"},
 }
 
 
@@ -75,6 +87,11 @@ def import_reference_lines(path: Path) -> list[ImportedReferenceLine]:
         lines.append(
             ImportedReferenceLine(
                 line_number=len(lines) + 1,
+                regel_type=_text(values.get("regel_type")) or "regel",
+                niveau=int(_decimal(values.get("niveau")) or 0),
+                hoofdstuk_code=_text(values.get("hoofdstuk_code")) or None,
+                hoofdstuk_omschrijving=_text(values.get("hoofdstuk_omschrijving")) or None,
+                post_code=_text(values.get("post_code")) or None,
                 project_name=_text(values.get("project_name")) or None,
                 relation_name=_text(values.get("relation_name")) or None,
                 document_date=_date(values.get("document_date")),
@@ -88,6 +105,7 @@ def import_reference_lines(path: Path) -> list[ImportedReferenceLine]:
                 onderaannemer=_decimal(values.get("onderaannemer")),
                 totaal_prijs_per_regel=total,
                 eenheidsprijs=unit_price,
+                bron_pagina=int(_decimal(values.get("bron_pagina")) or 0) or None,
                 confidence=confidence,
                 raw_text=" | ".join(_text(cell) for cell in row if _text(cell)),
             )

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session, aliased
 
 from .config import settings
 from .database import create_db, engine, get_session
-from .exporter import budget_document_to_xlsx, selected_budget_lines_to_xlsx
+from .exporter import budget_document_to_xlsx, control_model_document_to_xlsx, selected_budget_lines_to_xlsx
 from .index_provider import sync_price_index_series
 from .kengetallen import import_reference_lines
 from .models import (
@@ -301,6 +301,11 @@ async def upload_document(
     document.budget_lines = [
         BudgetLine(
             line_number=line.line_number,
+            regel_type=line.regel_type,
+            niveau=line.niveau,
+            hoofdstuk_code=line.hoofdstuk_code,
+            hoofdstuk_omschrijving=line.hoofdstuk_omschrijving,
+            post_code=line.post_code,
             omschrijving_werkzaamheden=line.omschrijving_werkzaamheden,
             hoeveelheid=line.hoeveelheid,
             eenheid=line.eenheid,
@@ -311,6 +316,7 @@ async def upload_document(
             onderaannemer=line.onderaannemer,
             totaal_prijs_per_regel=line.totaal_prijs_per_regel,
             eenheidsprijs=line.eenheidsprijs,
+            bron_pagina=line.bron_pagina,
             confidence=line.confidence,
             raw_text=line.raw_text,
         )
@@ -353,6 +359,11 @@ async def upload_reference_dataset(
     dataset.lines = [
         ReferenceLine(
             line_number=line.line_number,
+            regel_type=line.regel_type,
+            niveau=line.niveau,
+            hoofdstuk_code=line.hoofdstuk_code,
+            hoofdstuk_omschrijving=line.hoofdstuk_omschrijving,
+            post_code=line.post_code,
             project_name=line.project_name,
             relation_name=line.relation_name,
             document_date=line.document_date,
@@ -366,6 +377,7 @@ async def upload_reference_dataset(
             onderaannemer=line.onderaannemer,
             totaal_prijs_per_regel=line.totaal_prijs_per_regel,
             eenheidsprijs=line.eenheidsprijs,
+            bron_pagina=line.bron_pagina,
             confidence=line.confidence,
             raw_text=line.raw_text,
         )
@@ -443,6 +455,11 @@ async def upload_assessment_input(
         document.budget_lines = [
             BudgetLine(
                 line_number=line.line_number,
+                regel_type=line.regel_type,
+                niveau=line.niveau,
+                hoofdstuk_code=line.hoofdstuk_code,
+                hoofdstuk_omschrijving=line.hoofdstuk_omschrijving,
+                post_code=line.post_code,
                 omschrijving_werkzaamheden=line.omschrijving_werkzaamheden,
                 hoeveelheid=line.hoeveelheid,
                 eenheid=line.eenheid,
@@ -453,6 +470,7 @@ async def upload_assessment_input(
                 onderaannemer=line.onderaannemer,
                 totaal_prijs_per_regel=line.totaal_prijs_per_regel,
                 eenheidsprijs=line.eenheidsprijs,
+                bron_pagina=line.bron_pagina,
                 confidence=line.confidence,
                 raw_text=line.raw_text,
             )
@@ -464,6 +482,11 @@ async def upload_assessment_input(
         document.budget_lines = [
             BudgetLine(
                 line_number=line.line_number,
+                regel_type=line.regel_type,
+                niveau=line.niveau,
+                hoofdstuk_code=line.hoofdstuk_code,
+                hoofdstuk_omschrijving=line.hoofdstuk_omschrijving,
+                post_code=line.post_code,
                 omschrijving_werkzaamheden=line.omschrijving_werkzaamheden,
                 hoeveelheid=line.hoeveelheid,
                 eenheid=line.eenheid,
@@ -474,6 +497,7 @@ async def upload_assessment_input(
                 onderaannemer=line.onderaannemer,
                 totaal_prijs_per_regel=line.totaal_prijs_per_regel,
                 eenheidsprijs=line.eenheidsprijs,
+                bron_pagina=line.bron_pagina,
                 confidence=line.confidence,
                 raw_text=line.raw_text,
             )
@@ -708,6 +732,11 @@ def reparse_document_with_openai(
     document.budget_lines = [
         BudgetLine(
             line_number=line.line_number,
+            regel_type=line.regel_type,
+            niveau=line.niveau,
+            hoofdstuk_code=line.hoofdstuk_code,
+            hoofdstuk_omschrijving=line.hoofdstuk_omschrijving,
+            post_code=line.post_code,
             omschrijving_werkzaamheden=line.omschrijving_werkzaamheden,
             hoeveelheid=line.hoeveelheid,
             eenheid=line.eenheid,
@@ -718,6 +747,7 @@ def reparse_document_with_openai(
             onderaannemer=line.onderaannemer,
             totaal_prijs_per_regel=line.totaal_prijs_per_regel,
             eenheidsprijs=line.eenheidsprijs,
+            bron_pagina=line.bron_pagina,
             confidence=line.confidence,
             raw_text=line.raw_text,
         )
@@ -987,6 +1017,21 @@ def export_document(document_id: int, session: Session = Depends(get_session)) -
 
     stream = budget_document_to_xlsx(document)
     filename = f"begroting-{document.id}.xlsx"
+    return StreamingResponse(
+        stream,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/documents/{document_id}/controlemodel.xlsx")
+def export_control_model(document_id: int, session: Session = Depends(get_session)) -> StreamingResponse:
+    document = session.get(IncomingDocument, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document niet gevonden.")
+
+    stream = control_model_document_to_xlsx(document)
+    filename = f"controlemodel-{document.id}.xlsx"
     return StreamingResponse(
         stream,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
