@@ -329,6 +329,17 @@ button:hover {
   margin-top: 10px;
 }
 
+.flash-message {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(45, 227, 138, 0.42);
+  border-left: 4px solid var(--green);
+  border-radius: 7px;
+  color: #dfffee;
+  background: rgba(45, 227, 138, 0.12);
+  font-weight: 800;
+}
+
 .workspace,
 .detail-grid {
   display: grid;
@@ -1050,6 +1061,42 @@ textarea {
   display: grid;
   gap: 10px;
   padding: 10px;
+}
+
+.score-level {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(126, 169, 219, 0.24);
+  border-radius: 7px;
+  background: rgba(3, 18, 31, 0.24);
+}
+
+.score-level-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 2px 6px;
+}
+
+.score-level-header > div {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.score-level-header strong {
+  color: #fff;
+  font-size: 15px;
+}
+
+.score-level-header small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .suggestion-group {

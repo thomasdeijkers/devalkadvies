@@ -87,6 +87,9 @@
             <a href="https://www.devalkadvies.nl/" class="ghost-button">Website</a>
           </div>
         </header>
+        {% if flash_message %}
+          <div class="flash-message" role="status">{{ flash_message }}</div>
+        {% endif %}
         <section class="shell">
           {% block content %}{% endblock %}
         </section>

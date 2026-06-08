@@ -249,8 +249,9 @@ def _render_workspace(
         select(NormalizationTerm).order_by(NormalizationTerm.canonical_label, NormalizationTerm.alias).limit(400)
     ).all()
     normalization_candidates = _normalization_candidate_lines(session) if active_page == "normalisatie" else []
-    normalization_candidate_groups = _normalization_candidate_groups(normalization_candidates)
+    normalization_score_levels = _normalization_candidate_score_levels(normalization_candidates)
     normalization_stats = _normalization_stats(session)
+    flash_message = _flash_message(request)
     status_context = _status_context(session)
     consult_lines = _consult_lines(session, query, status, date_from, date_to, priced, min_score) if active_page == "consult" else []
 
@@ -277,8 +278,9 @@ def _render_workspace(
             "reference_line_count": reference_line_count,
             "normalization_terms": normalization_terms,
             "normalization_candidates": normalization_candidates,
-            "normalization_candidate_groups": normalization_candidate_groups,
+            "normalization_score_levels": normalization_score_levels,
             "normalization_stats": normalization_stats,
+            "flash_message": flash_message,
             "selected_project": project or "",
             "selected_query": query or "",
             "selected_status": status or "",
@@ -669,7 +671,7 @@ def delete_normalization_term(term_id: int, session: Session = Depends(get_sessi
 @app.post("/normalisatie/apply")
 def apply_normalization_to_existing(session: Session = Depends(get_session)) -> RedirectResponse:
     _reapply_all_normalization(session)
-    return RedirectResponse("/normalisatie", status_code=303)
+    return RedirectResponse("/normalisatie?notice=normalisatie_bijgewerkt", status_code=303)
 
 
 @app.post("/normalisatie/suggesties/{line_id}/validate")
@@ -689,7 +691,7 @@ def validate_normalization_suggestion(line_id: int, session: Session = Depends(g
         "100",
     )
     _reapply_all_normalization(session)
-    return RedirectResponse("/normalisatie", status_code=303)
+    return RedirectResponse("/normalisatie?notice=voorstel_gevalideerd#woordenboek", status_code=303)
 
 
 @app.post("/normalisatie/suggesties/{line_id}/terms")
@@ -710,7 +712,7 @@ def create_term_from_suggestion(
         alias_values = f"{line.omschrijving_werkzaamheden}\n{alias_values}".strip()
     _add_normalization_terms(session, canonical_label, alias_values, category, match_type, min_score)
     _reapply_all_normalization(session)
-    return RedirectResponse("/normalisatie", status_code=303)
+    return RedirectResponse("/normalisatie?notice=term_toegevoegd#woordenboek", status_code=303)
 
 
 @app.post("/beoordeling/upload")
@@ -1541,6 +1543,47 @@ def _normalization_candidate_groups(lines: list[BudgetLine]) -> list[dict[str, o
     return sorted(grouped, key=lambda item: (-int(item["best_score"]), str(item["label"]).lower()))
 
 
+def _normalization_candidate_score_levels(lines: list[BudgetLine]) -> list[dict[str, object]]:
+    levels = [
+        {
+            "key": "high",
+            "label": "75 - 100",
+            "title": "Sterke voorstellen",
+            "description": "Waarschijnlijk goed, snel valideren.",
+            "groups": [],
+            "count": 0,
+        },
+        {
+            "key": "mid",
+            "label": "50 - 75",
+            "title": "Twijfelgevallen",
+            "description": "Controleren voordat je ze hard maakt.",
+            "groups": [],
+            "count": 0,
+        },
+        {
+            "key": "low",
+            "label": "0 - 50",
+            "title": "Aanvullen",
+            "description": "Waarschijnlijk handmatig aanvullen of negeren.",
+            "groups": [],
+            "count": 0,
+        },
+    ]
+    by_key = {str(level["key"]): level for level in levels}
+    for group in _normalization_candidate_groups(lines):
+        score = int(group["best_score"] or 0)
+        if score >= 75:
+            level = by_key["high"]
+        elif score >= 50:
+            level = by_key["mid"]
+        else:
+            level = by_key["low"]
+        level["groups"].append(group)
+        level["count"] = int(level["count"]) + int(group["count"])
+    return [level for level in levels if level["groups"]]
+
+
 def _normalization_stats(session: Session) -> dict[str, int]:
     budget_total = session.scalar(select(func.count(BudgetLine.id))) or 0
     reference_total = session.scalar(select(func.count(ReferenceLine.id))) or 0
@@ -1787,6 +1830,15 @@ def _int_or_none(value: str | int | None) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _flash_message(request: Request) -> str | None:
+    messages = {
+        "voorstel_gevalideerd": "Voorstel gevalideerd en toegevoegd aan het basiswoordenboek.",
+        "term_toegevoegd": "Nieuwe normalisatieterm opgeslagen en opnieuw toegepast.",
+        "normalisatie_bijgewerkt": "Alle regels zijn opnieuw genormaliseerd.",
+    }
+    return messages.get(request.query_params.get("notice", ""))
 
 
 def request_url_for_document(document_id: int, archived: bool = False) -> str:
