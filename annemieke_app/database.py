@@ -47,6 +47,15 @@ def _apply_lightweight_migrations() -> None:
     if "parser_progress" not in document_columns:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE incoming_documents ADD COLUMN parser_progress INTEGER DEFAULT 0"))
+    document_migrations = {
+        "source_total_amount": "ALTER TABLE incoming_documents ADD COLUMN source_total_amount NUMERIC(14, 2)",
+        "source_total_source": "ALTER TABLE incoming_documents ADD COLUMN source_total_source VARCHAR(120)",
+        "source_total_manual": "ALTER TABLE incoming_documents ADD COLUMN source_total_manual INTEGER DEFAULT 0",
+    }
+    for column_name, statement in document_migrations.items():
+        if column_name not in document_columns:
+            with engine.begin() as connection:
+                connection.execute(text(statement))
 
     if "budget_lines" in inspector.get_table_names():
         budget_line_columns = {column["name"] for column in inspector.get_columns("budget_lines")}

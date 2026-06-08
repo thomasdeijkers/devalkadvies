@@ -22,10 +22,12 @@
           {% endif %}
         </div>
         <div class="review-totals">
-          <span class="total-chip">
+          <form action="/documents/{{ document.id }}/source-total" method="post" class="total-chip source-total-form">
             <small>Originele input</small>
-            <strong>{% if total_context.source_total is not none %}{{ total_context.source_total|euro }}{% else %}-{% endif %}</strong>
-          </span>
+            <input name="source_total_amount" value="{% if total_context.source_total is not none %}{{ total_context.source_total|amount }}{% endif %}" placeholder="bedrag">
+            <button type="submit">Opslaan</button>
+            {% if total_context.source_label %}<em>{{ total_context.source_label }}</em>{% endif %}
+          </form>
           <span class="total-chip">
             <small>Regels</small>
             <strong>{{ total_context.line_total|euro }}</strong>
@@ -41,6 +43,7 @@
       <form action="/documents/{{ document.id }}/status" method="post" class="status-form compact-actions">
         <button name="status" value="needs_review" type="submit">Te controleren</button>
         <button name="status" value="archived" type="submit">Archiveren</button>
+        <a class="button-link" href="#source-preview">Bijlage</a>
         {% if document.status != "processing" %}
           <a class="button-link" href="/documents/{{ document.id }}/export.xlsx">Excel</a>
           <a class="button-link" href="/documents/{{ document.id }}/controlemodel.xlsx">Controlemodel</a>
@@ -284,6 +287,17 @@
     <h2>Gevonden tekst</h2>
     <pre>{{ document.parsed_text or "Geen tekst beschikbaar." }}</pre>
   </article>
+
+  <div id="source-preview" class="pdf-modal">
+    <a class="modal-backdrop" href="#"></a>
+    <article class="pdf-panel source-preview-panel">
+      <div class="pdf-header">
+        <strong>{{ document.original_filename }}</strong>
+        <a class="mini-button" href="#">Sluiten</a>
+      </div>
+      <iframe title="Bronbestand preview" data-preview-src="/documents/{{ document.id }}/preview"></iframe>
+    </article>
+  </div>
 </section>
 
 {% endblock %}

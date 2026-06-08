@@ -51,7 +51,9 @@ app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")
 logo_path = Path(__file__).resolve().parent.parent / "logo.webp"
 m3e_logo_path = Path(__file__).resolve().parent.parent / "logo_M3E.jpg"
 APP_STARTED_AT = time.time()
-MONEY_TEXT_PATTERN = re.compile(r"(?:€\s*)?-?\d{1,3}(?:[.\s]\d{3})*(?:,\d{2})|-?\d+(?:[.,]\d{2})")
+MONEY_TEXT_PATTERN = re.compile(
+    r"(?:€\s*)?-?(?:\d{1,3}(?:[.\s]\d{3})+(?:,\d{2})?|\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d+(?:[.,]\d{2}))"
+)
 
 
 def euro(value: Decimal | int | float | str | None) -> str:
@@ -324,14 +326,38 @@ def m3e_logo() -> FileResponse:
     return FileResponse(logo_path, media_type="image/webp")
 
 
-def _document_pdf_path(document_id: int, session: Session) -> tuple[IncomingDocument, Path]:
+def _document_file_path(document_id: int, session: Session) -> tuple[IncomingDocument, Path]:
     document = session.get(IncomingDocument, document_id)
     if document is None:
         raise HTTPException(status_code=404, detail="Document niet gevonden.")
     file_path = settings.upload_dir / document.stored_filename
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail="PDF niet gevonden.")
+        raise HTTPException(status_code=404, detail="Bronbestand niet gevonden.")
     return document, file_path
+
+
+def _document_pdf_path(document_id: int, session: Session) -> tuple[IncomingDocument, Path]:
+    document, file_path = _document_file_path(document_id, session)
+    if file_path.suffix.lower() != ".pdf":
+        raise HTTPException(status_code=400, detail="Dit document is geen PDF.")
+    return document, file_path
+
+
+@app.get("/documents/{document_id}/original")
+def original_file(document_id: int, session: Session = Depends(get_session)) -> FileResponse:
+    document, file_path = _document_file_path(document_id, session)
+    suffix = file_path.suffix.lower()
+    media_type = {
+        ".pdf": "application/pdf",
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".xlsm": "application/vnd.ms-excel.sheet.macroEnabled.12",
+    }.get(suffix, "application/octet-stream")
+    return FileResponse(
+        file_path,
+        media_type=media_type,
+        filename=document.original_filename,
+        content_disposition_type="inline",
+    )
 
 
 @app.get("/documents/{document_id}/original.pdf")
@@ -347,7 +373,12 @@ def original_pdf(document_id: int, session: Session = Depends(get_session)) -> F
 
 @app.get("/documents/{document_id}/preview", response_class=HTMLResponse)
 def document_preview(document_id: int, session: Session = Depends(get_session)) -> HTMLResponse:
-    document, file_path = _document_pdf_path(document_id, session)
+    document, file_path = _document_file_path(document_id, session)
+    if file_path.suffix.lower() in {".xlsx", ".xlsm"}:
+        return _excel_preview_response(document, file_path)
+    if file_path.suffix.lower() != ".pdf":
+        return _plain_preview_response(document, "Voor dit bestandstype is nog geen preview beschikbaar.")
+
     try:
         import fitz
     except Exception as exc:  # pragma: no cover - dependency issue is deployment specific
@@ -455,6 +486,94 @@ def document_preview(document_id: int, session: Session = Depends(get_session)) 
   </body>
 </html>"""
     )
+
+
+def _excel_preview_response(document: IncomingDocument, file_path: Path) -> HTMLResponse:
+    try:
+        from openpyxl import load_workbook
+
+        workbook = load_workbook(file_path, data_only=True, read_only=True)
+        sheet = next((item for item in workbook.worksheets if item.sheet_state == "visible"), workbook.worksheets[0])
+        rows = []
+        max_rows = min(sheet.max_row or 0, 120)
+        max_cols = min(sheet.max_column or 0, 28)
+        for row in sheet.iter_rows(min_row=1, max_row=max_rows, max_col=max_cols, values_only=True):
+            if not any(value not in {None, ""} for value in row):
+                continue
+            rows.append(row)
+        workbook.close()
+    except Exception as exc:
+        return _plain_preview_response(document, f"Excel-preview kon niet worden opgebouwd: {escape(str(exc)[:180])}")
+
+    header_cells = ""
+    body_rows = ""
+    if rows:
+        first_row = rows[0]
+        header_cells = "".join(f"<th>{escape(_preview_cell(value))}</th>" for value in first_row)
+        body_rows = "\n".join(
+            "<tr>" + "".join(f"<td>{escape(_preview_cell(value))}</td>" for value in row) + "</tr>"
+            for row in rows[1:]
+        )
+    else:
+        body_rows = '<tr><td class="empty">Geen gevulde cellen gevonden in de eerste regels.</td></tr>'
+
+    safe_name = escape(document.original_filename)
+    safe_sheet = escape(sheet.title)
+    return HTMLResponse(
+        f"""<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{safe_name}</title>
+    <style>
+      :root {{ color-scheme: dark; --bg: #07131b; --panel: #0d2132; --line: #2b5878; --head: #173e62; --text: #f7fbff; --muted: #b8c9d7; }}
+      * {{ box-sizing: border-box; }}
+      body {{ margin: 0; color: var(--text); background: var(--bg); font-family: Arial, Helvetica, sans-serif; }}
+      header {{ position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; gap: 16px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: rgba(7, 19, 27, 0.96); }}
+      strong {{ display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }}
+      small {{ color: var(--muted); font-size: 12px; }}
+      main {{ padding: 16px; overflow: auto; }}
+      table {{ min-width: 980px; width: 100%; border-collapse: collapse; background: var(--panel); }}
+      th, td {{ max-width: 360px; padding: 7px 9px; border: 1px solid rgba(126, 169, 219, 0.22); vertical-align: top; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }}
+      th {{ position: sticky; top: 49px; z-index: 1; color: #d9f4ff; background: var(--head); text-align: left; text-transform: uppercase; font-size: 11px; }}
+      td.empty {{ color: var(--muted); }}
+    </style>
+  </head>
+  <body>
+    <header>
+      <div><strong>{safe_name}</strong><small>Excel-preview: {safe_sheet}</small></div>
+      <small>Eerste {len(rows)} gevulde regels</small>
+    </header>
+    <main>
+      <table>
+        <thead><tr>{header_cells}</tr></thead>
+        <tbody>{body_rows}</tbody>
+      </table>
+    </main>
+  </body>
+</html>"""
+    )
+
+
+def _plain_preview_response(document: IncomingDocument, message: str) -> HTMLResponse:
+    safe_name = escape(document.original_filename)
+    return HTMLResponse(
+        f"""<!doctype html>
+<html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{safe_name}</title><style>body{{margin:0;padding:24px;background:#07131b;color:#f7fbff;font-family:Arial,sans-serif}}article{{padding:18px;border:1px solid #2b5878;border-radius:8px;background:#0d2132}}small{{color:#b8c9d7}}</style></head>
+<body><article><strong>{safe_name}</strong><p>{message}</p><small>Gebruik download/openen alleen buiten deze popup als je het originele bestand nodig hebt.</small></article></body></html>"""
+    )
+
+
+def _preview_cell(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.strftime("%d-%m-%Y")
+    if isinstance(value, Decimal):
+        return amount(value)
+    return str(value)
 
 
 @app.get("/documents/{document_id}/preview/page/{page_number}.png")
@@ -814,6 +933,9 @@ async def upload_assessment_input(
     for line in document.budget_lines:
         _normalize_line_prices(line)
     apply_normalization(session, document.budget_lines)
+    source_total, source_label = _source_total_from_document(document, include_saved=False)
+    document.source_total_amount = source_total
+    document.source_total_source = source_label
     session.add(document)
     session.commit()
     return RedirectResponse(f"/documents/{document.id}", status_code=303)
@@ -1097,6 +1219,24 @@ def update_document_meta(
     return RedirectResponse(f"/documents/{document.id}", status_code=303)
 
 
+@app.post("/documents/{document_id}/source-total")
+def update_document_source_total(
+    document_id: int,
+    source_total_amount: str = Form(""),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    document = session.get(IncomingDocument, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document niet gevonden.")
+
+    parsed_total = _decimal_or_none(source_total_amount)
+    document.source_total_amount = parsed_total
+    document.source_total_source = "handmatig" if parsed_total is not None else None
+    document.source_total_manual = 1 if parsed_total is not None else 0
+    session.commit()
+    return RedirectResponse(f"/documents/{document.id}?notice=origineel_totaal_opgeslagen", status_code=303)
+
+
 @app.post("/documents/{document_id}/fields")
 def add_field(
     document_id: int,
@@ -1355,13 +1495,21 @@ def export_screening_template(
     if template and template.stored_filename:
         template_path = settings.upload_dir / template.stored_filename
         if template_path.exists():
-            stream = fill_screening_template(document, template_path, template.target_sheet, m3e_logo_path)
-            filename = template.output_filename or f"screening-{document.id}.xlsx"
-            return StreamingResponse(
-                stream,
-                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-            )
+            try:
+                stream = fill_screening_template(document, template_path, template.target_sheet, m3e_logo_path)
+                filename = _excel_filename(template.output_filename or f"screening-{document.id}.xlsx", template_path.suffix)
+                media_type = (
+                    "application/vnd.ms-excel.sheet.macroEnabled.12"
+                    if filename.lower().endswith(".xlsm")
+                    else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+                return StreamingResponse(
+                    stream,
+                    media_type=media_type,
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+                )
+            except Exception:
+                pass
 
     stream = control_model_document_to_xlsx(document)
     return StreamingResponse(
@@ -1407,6 +1555,8 @@ def document_json(document_id: int, session: Session = Depends(get_session)) -> 
         "parser_notes": document.parser_notes or "",
         "line_count": len(document.budget_lines),
         "parsed_text_available": bool(document.parsed_text),
+        "source_total_amount": float(document.source_total_amount) if document.source_total_amount is not None else None,
+        "source_total_source": document.source_total_source or "",
         "fields": [
             {
                 "name": field.field_name,
@@ -1437,9 +1587,18 @@ def _decimal_or_none(value: str) -> Decimal | None:
     if cleaned in {"-", "--", ".", ",", "-.", "-,"}:
         return None
     if "," in cleaned and "." in cleaned:
-        cleaned = cleaned.replace(".", "").replace(",", ".")
+        if cleaned.rfind(",") > cleaned.rfind("."):
+            cleaned = cleaned.replace(".", "").replace(",", ".")
+        else:
+            cleaned = cleaned.replace(",", "")
+    elif "." in cleaned:
+        if cleaned.count(".") > 1 or re.fullmatch(r"-?\d{1,3}(?:\.\d{3})+", cleaned):
+            cleaned = cleaned.replace(".", "")
     elif "," in cleaned:
-        cleaned = cleaned.replace(",", ".")
+        if cleaned.count(",") > 1 or re.fullmatch(r"-?\d{1,3}(?:,\d{3})+", cleaned):
+            cleaned = cleaned.replace(",", "")
+        else:
+            cleaned = cleaned.replace(",", ".")
     try:
         return Decimal(cleaned)
     except InvalidOperation:
@@ -1671,9 +1830,26 @@ def _budget_line_total(lines: list[BudgetLine]) -> Decimal:
     return total
 
 
-def _source_total_from_document(document: IncomingDocument) -> tuple[Decimal | None, str | None]:
+def _source_total_from_document(
+    document: IncomingDocument,
+    include_saved: bool = True,
+) -> tuple[Decimal | None, str | None]:
+    if include_saved and document.source_total_amount is not None:
+        label = document.source_total_source or "opgeslagen origineel totaal"
+        return Decimal(str(document.source_total_amount)), label
+
     candidates: list[tuple[int, Decimal, str]] = []
-    strong_keywords = ("eindtotaal", "totaal", "aanneemsom", "inschrijfsom", "bouwkosten", "begrotingstotaal")
+    strong_keywords = (
+        "eindtotaal",
+        "eind totaal",
+        "totaal",
+        "aanneemsom",
+        "inschrijfsom",
+        "bouwkosten",
+        "begrotingstotaal",
+        "totaal begroting",
+        "totaal bouwkosten",
+    )
 
     for field in document.fields:
         haystack = f"{field.field_name} {field.field_value}".lower()
@@ -1681,7 +1857,7 @@ def _source_total_from_document(document: IncomingDocument) -> tuple[Decimal | N
         if amount_value is None:
             continue
         if any(keyword in haystack for keyword in strong_keywords):
-            candidates.append((3, amount_value, f"veld: {field.field_name}"))
+            candidates.append((4, amount_value, f"veld: {field.field_name}"))
         elif field.field_name.lower() == "bedrag":
             candidates.append((1, amount_value, "veld: bedrag"))
 
@@ -1692,7 +1868,7 @@ def _source_total_from_document(document: IncomingDocument) -> tuple[Decimal | N
             continue
         amount_value = _last_amount_decimal(line)
         if amount_value is not None:
-            candidates.append((2, amount_value, "originele tekst"))
+            candidates.append((3, amount_value, "originele tekst"))
 
     for line in document.budget_lines:
         description = (line.omschrijving_werkzaamheden or "").lower()
@@ -1917,6 +2093,10 @@ def _parse_document_background(document_id: int, usage_source: str, force_openai
         for line in document.budget_lines:
             _normalize_line_prices(line)
         apply_normalization(session, document.budget_lines)
+        if document.source_total_manual != 1:
+            source_total, source_label = _source_total_from_document(document, include_saved=False)
+            document.source_total_amount = source_total
+            document.source_total_source = source_label
         document.status = "needs_review"
         document.parser_stage = "Klaar voor controle"
         document.parser_progress = 100
@@ -2063,6 +2243,7 @@ def _flash_message(request: Request) -> str | None:
         "voorstel_gevalideerd": "Voorstel gevalideerd en toegevoegd aan het basiswoordenboek.",
         "term_toegevoegd": "Nieuwe normalisatieterm opgeslagen en opnieuw toegepast.",
         "normalisatie_bijgewerkt": "Alle regels zijn opnieuw genormaliseerd.",
+        "origineel_totaal_opgeslagen": "Origineel inputtotaal opgeslagen voor deze beoordeling.",
         "regels_opgeslagen": "Begrotingsregels opgeslagen en opnieuw genormaliseerd.",
         "regels_verwijderd": "Geselecteerde begrotingsregels verwijderd.",
         "regels_gevalideerd": "Begrotingsregels gevalideerd en document gemarkeerd als verwerkt.",
@@ -2081,6 +2262,13 @@ def _safe_return(value: str | None) -> str | None:
     if cleaned.startswith("/") and not cleaned.startswith("//"):
         return cleaned
     return None
+
+
+def _excel_filename(filename: str, template_suffix: str = ".xlsx") -> str:
+    cleaned = re.sub(r'[^A-Za-z0-9_. -]+', "_", (filename or "").strip()) or "export.xlsx"
+    suffix = ".xlsm" if template_suffix.lower() == ".xlsm" else ".xlsx"
+    stem = re.sub(r"\.(xlsx|xlsm)$", "", cleaned, flags=re.IGNORECASE)
+    return f"{stem}{suffix}"
 
 
 def _parser_note(parsed) -> str | None:

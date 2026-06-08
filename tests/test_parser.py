@@ -1,4 +1,4 @@
-from annemieke_app.parser import _extract_fields, extract_budget_lines
+from annemieke_app.parser import _extract_fields, _to_decimal, extract_budget_lines
 
 
 def test_extracts_key_value_fields() -> None:
@@ -37,3 +37,8 @@ def test_extracts_wrapped_budget_line() -> None:
     assert lines[0].omschrijving_werkzaamheden == "18mm MDF plafondplaat"
     assert str(lines[0].hoeveelheid) == "583.31"
     assert str(lines[0].totaal_prijs_per_regel) == "46041.00"
+
+
+def test_parses_large_dutch_integer_amounts() -> None:
+    assert str(_to_decimal("15.495.000")) == "15495000"
+    assert str(_to_decimal("15.495.000,00")) == "15495000.00"

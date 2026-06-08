@@ -8,6 +8,7 @@ from openpyxl.utils import get_column_letter
 from decimal import Decimal, InvalidOperation
 
 from .models import BudgetLine, IncomingDocument
+from .normalizer import is_noise_line
 
 
 HEADERS = [
@@ -51,11 +52,17 @@ def budget_document_to_xlsx(document: IncomingDocument) -> BytesIO:
     sheet["B2"] = document.original_filename
     sheet["A3"] = "Status"
     sheet["B3"] = document.status
-    for row in range(1, 4):
+    sheet["A4"] = "Originele input"
+    sheet["B4"] = document.source_total_amount
+    sheet["A5"] = "Regeltotaal"
+    sheet["B5"] = _line_total(document.budget_lines)
+    for row in range(1, 6):
         sheet[f"A{row}"].font = Font(bold=True, color="1F4E78")
         sheet[f"B{row}"].font = Font(bold=True)
+    sheet["B4"].number_format = u'€ #,##0.00'
+    sheet["B5"].number_format = u'€ #,##0.00'
 
-    start_row = 5
+    start_row = 7
     sheet.append([])
     sheet.append(HEADERS)
     for cell in sheet[start_row]:
@@ -127,11 +134,17 @@ def control_model_document_to_xlsx(document: IncomingDocument) -> BytesIO:
     sheet["B2"] = document.original_filename
     sheet["A3"] = "Model"
     sheet["B3"] = "Begroting beoordeling"
-    for row in range(1, 4):
+    sheet["A4"] = "Originele input"
+    sheet["B4"] = document.source_total_amount
+    sheet["A5"] = "Regeltotaal"
+    sheet["B5"] = _line_total(document.budget_lines)
+    for row in range(1, 6):
         sheet[f"A{row}"].font = Font(bold=True, color="1F4E78")
         sheet[f"B{row}"].font = Font(bold=True)
+    sheet["B4"].number_format = u'€ #,##0.00'
+    sheet["B5"].number_format = u'€ #,##0.00'
 
-    start_row = 5
+    start_row = 7
     sheet.append([])
     sheet.append(CONTROL_MODEL_HEADERS)
     for cell in sheet[start_row]:
@@ -279,6 +292,23 @@ def _unit_price(line: BudgetLine) -> Decimal | None:
         except (InvalidOperation, ZeroDivisionError):
             return line.eenheidsprijs
     return line.eenheidsprijs
+
+
+def _line_total(lines: list[BudgetLine]) -> Decimal:
+    usable_lines = [
+        line
+        for line in lines
+        if line.totaal_prijs_per_regel is not None
+        and line.regel_type not in {"hoofdstuk", "post", "subtotaal", "totaal"}
+        and not is_noise_line(line.omschrijving_werkzaamheden)
+    ]
+    if not usable_lines:
+        usable_lines = [line for line in lines if line.totaal_prijs_per_regel is not None]
+
+    total = Decimal("0")
+    for line in usable_lines:
+        total += Decimal(str(line.totaal_prijs_per_regel or 0))
+    return total
 
 
 def _display_amount(value: Decimal | None) -> int | float | None:

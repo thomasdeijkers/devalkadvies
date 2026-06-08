@@ -39,7 +39,7 @@ def fill_screening_template(
     target_sheet: str | None = None,
     logo_path: Path | None = None,
 ) -> BytesIO:
-    workbook = load_workbook(template_path)
+    workbook = load_workbook(template_path, keep_vba=template_path.suffix.lower() == ".xlsm")
     sheet = workbook[target_sheet] if target_sheet and target_sheet in workbook.sheetnames else _best_sheet(workbook.worksheets)
     header_row, mapping = _find_header_row(sheet)
     if not mapping:
@@ -185,6 +185,8 @@ def _write_document_header(sheet: Worksheet, document: IncomingDocument, logo_pa
         _write_if_empty(sheet, "AK5", document.original_filename)
     if document.created_at:
         _write_if_empty(sheet, "AN7", document.created_at.strftime("%d-%m-%Y"))
+    if document.source_total_amount is not None:
+        _write_if_empty(sheet, "AN8", document.source_total_amount)
     if logo_path and logo_path.exists() and not getattr(sheet, "_images", []):
         try:
             image = ExcelImage(str(logo_path))

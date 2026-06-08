@@ -15,9 +15,10 @@ KEY_VALUE_PATTERN = re.compile(
     re.MULTILINE,
 )
 DATE_PATTERN = re.compile(r"\b(?P<date>\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\b")
-AMOUNT_PATTERN = re.compile(r"\b(?:EUR|euro|bedrag)?\s*(?P<amount>\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2}))\b", re.IGNORECASE)
+AMOUNT_TEXT = r"-?(?:\d{1,3}(?:[.\s]\d{3})+(?:,\d{2})?|\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d+(?:[.,]\d{2}))"
+AMOUNT_PATTERN = re.compile(rf"\b(?:EUR|euro|bedrag)?\s*(?P<amount>{AMOUNT_TEXT})\b", re.IGNORECASE)
 QUANTITY_PATTERN = re.compile(r"(?P<quantity>\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,3})?)\s*(?P<unit>m1|m2|m3|st|stk|wkn|wk|uur|uren|kg|ton)\b", re.IGNORECASE)
-MONEY_PATTERN = re.compile(r"\d{1,3}(?:[.]\d{3})*(?:,\d{2})|\d+(?:[.,]\d{2})")
+MONEY_PATTERN = re.compile(AMOUNT_TEXT)
 
 
 @dataclass(frozen=True)
@@ -271,9 +272,18 @@ def _looks_like_budget_line(line: str) -> bool:
 def _to_decimal(value: str) -> Decimal | None:
     cleaned = value.strip().replace(" ", "")
     if "," in cleaned and "." in cleaned:
-        cleaned = cleaned.replace(".", "").replace(",", ".")
+        if cleaned.rfind(",") > cleaned.rfind("."):
+            cleaned = cleaned.replace(".", "").replace(",", ".")
+        else:
+            cleaned = cleaned.replace(",", "")
+    elif "." in cleaned:
+        if cleaned.count(".") > 1 or re.fullmatch(r"-?\d{1,3}(?:\.\d{3})+", cleaned):
+            cleaned = cleaned.replace(".", "")
     elif "," in cleaned:
-        cleaned = cleaned.replace(",", ".")
+        if cleaned.count(",") > 1 or re.fullmatch(r"-?\d{1,3}(?:,\d{3})+", cleaned):
+            cleaned = cleaned.replace(",", "")
+        else:
+            cleaned = cleaned.replace(",", ".")
     try:
         return Decimal(cleaned)
     except InvalidOperation:
