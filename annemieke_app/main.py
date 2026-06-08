@@ -75,6 +75,19 @@ def amount(value: Decimal | int | float | str | None) -> str:
     return formatted.rstrip("0").rstrip(",")
 
 
+def quantity(value: Decimal | int | float | str | None) -> str:
+    if value is None or value == "":
+        return ""
+    try:
+        number = Decimal(str(value))
+    except InvalidOperation:
+        return str(value)
+    if number == number.to_integral_value():
+        return str(number.quantize(Decimal("1")))
+    formatted = f"{number.quantize(Decimal('0.1')):,.1f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return formatted.rstrip("0").rstrip(",")
+
+
 def calculated_unit_price(line: BudgetLine) -> Decimal | None:
     if line.totaal_prijs_per_regel is not None and line.hoeveelheid not in {None, 0}:
         try:
@@ -86,6 +99,7 @@ def calculated_unit_price(line: BudgetLine) -> Decimal | None:
 
 templates.env.filters["euro"] = euro
 templates.env.filters["amount"] = amount
+templates.env.filters["quantity"] = quantity
 templates.env.filters["unit_price"] = calculated_unit_price
 
 
@@ -679,7 +693,9 @@ def validate_normalization_suggestion(line_id: int, session: Session = Depends(g
     line = session.get(BudgetLine, line_id)
     if line is None:
         raise HTTPException(status_code=404, detail="Voorstel niet gevonden.")
-    canonical_label = (line.normalization_candidate or line.normalized_omschrijving or line.omschrijving_werkzaamheden).strip()
+    canonical_label = str(
+        line.normalization_candidate or line.normalized_omschrijving or line.omschrijving_werkzaamheden or ""
+    ).strip()
     if not canonical_label:
         raise HTTPException(status_code=400, detail="Geen voorstel beschikbaar.")
     _add_normalization_terms(
@@ -754,7 +770,7 @@ async def upload_assessment_input(
     if suffix == ".pdf":
         session.add(document)
         session.commit()
-        background_tasks.add_task(_parse_document_background, document.id, "assessment_upload")
+        background_tasks.add_task(_parse_document_background, document.id, "assessment_upload", True)
         return RedirectResponse(f"/documents/{document.id}", status_code=303)
     else:
         imported_lines = import_reference_lines(target_path)
@@ -1019,6 +1035,7 @@ def document_detail(
     if document is None:
         raise HTTPException(status_code=404, detail="Document niet gevonden.")
 
+    budget_line_groups = _budget_line_groups(document.budget_lines)
     return templates.TemplateResponse(
         request=request,
         name="document_detail.html",
@@ -1026,6 +1043,8 @@ def document_detail(
             "request": request,
             "app_name": settings.app_name,
             "document": document,
+            "budget_line_groups": budget_line_groups,
+            "flash_message": _flash_message(request),
             "project_options": session.scalars(select(Project).order_by(Project.name)).all(),
             "relation_options": session.scalars(select(Relation).order_by(Relation.name)).all(),
             "normalization_suggestions": [
@@ -1174,6 +1193,7 @@ async def update_budget_lines_bulk(
     form = await request.form()
     line_ids = form.getlist("line_id")
     delete_line_ids = {str(value) for value in form.getlist("delete_line_id")}
+    updated_lines: list[BudgetLine] = []
     for index, raw_line_id in enumerate(line_ids):
         try:
             line_id = int(str(raw_line_id))
@@ -1199,15 +1219,21 @@ async def update_budget_lines_bulk(
         line.totaal_prijs_per_regel = _decimal_or_none(_form_value(form, "totaal_prijs_per_regel", index))
         _normalize_line_prices(line)
         line.confidence = 100
-        apply_normalization(session, [line])
+        updated_lines.append(line)
 
+    if updated_lines:
+        apply_normalization(session, updated_lines)
     action = str(form.get("action") or "save")
     if action == "validate":
         document.status = "processed"
+        notice = "regels_gevalideerd"
     elif action != "delete_selected":
         document.status = "needs_review"
+        notice = "regels_opgeslagen"
+    else:
+        notice = "regels_verwijderd"
     session.commit()
-    return RedirectResponse(f"/documents/{document_id}", status_code=303)
+    return RedirectResponse(f"/documents/{document_id}?notice={notice}", status_code=303)
 
 
 @app.post("/documents/{document_id}/lines")
@@ -1374,8 +1400,21 @@ def document_json(document_id: int, session: Session = Depends(get_session)) -> 
 
 
 def _decimal_or_none(value: str) -> Decimal | None:
-    cleaned = value.strip().replace(" ", "")
+    raw_value = str(value or "")
+    cleaned = (
+        raw_value.strip()
+        .replace("\xa0", " ")
+        .replace("€", "")
+        .replace("$", "")
+        .replace("EUR", "")
+        .replace("eur", "")
+        .replace(" ", "")
+        .replace("−", "-")
+    )
+    cleaned = "".join(char for char in cleaned if char.isdigit() or char in {",", ".", "-"})
     if not cleaned:
+        return None
+    if cleaned in {"-", "--", ".", ",", "-.", "-,"}:
         return None
     if "," in cleaned and "." in cleaned:
         cleaned = cleaned.replace(".", "").replace(",", ".")
@@ -1498,6 +1537,72 @@ def _normalization_candidate_lines(session: Session, limit: int = 120) -> list[B
         .order_by(BudgetLine.normalization_candidate.is_(None), BudgetLine.normalization_score.desc(), BudgetLine.id.desc())
         .limit(limit)
     ).unique().all()
+
+
+def _budget_line_groups(lines: list[BudgetLine]) -> list[dict[str, object]]:
+    groups: dict[str, dict[str, object]] = {}
+    for line in lines:
+        description = (line.omschrijving_werkzaamheden or "").strip()
+        score = int(line.normalization_score or 0)
+        method = line.normalization_method or "raw"
+        if method == "noise" or is_noise_line(description):
+            label = "Lage kwaliteit / opschonen"
+            key = "noise"
+        else:
+            label = (
+                line.normalization_candidate
+                or line.normalized_omschrijving
+                or description
+                or "Niet genormaliseerd"
+            ).strip()
+            key = normalization_key(label) or label.lower()
+        group = groups.setdefault(
+            key,
+            {
+                "label": label,
+                "lines": [],
+                "best_score": 0,
+                "methods": set(),
+                "priced_count": 0,
+            },
+        )
+        group["lines"].append(line)
+        group["best_score"] = max(int(group["best_score"]), score)
+        group["methods"].add(method)
+        if calculated_unit_price(line) is not None or line.totaal_prijs_per_regel is not None:
+            group["priced_count"] = int(group["priced_count"]) + 1
+
+    grouped: list[dict[str, object]] = []
+    for group in groups.values():
+        group_lines = sorted(
+            group["lines"],
+            key=lambda item: (
+                -(item.normalization_score or 0),
+                1 if (item.normalization_method == "noise" or is_noise_line(item.omschrijving_werkzaamheden)) else 0,
+                item.line_number,
+                item.id,
+            ),
+        )
+        methods = sorted(str(method) for method in group["methods"] if method)
+        grouped.append(
+            {
+                "label": group["label"],
+                "lines": group_lines,
+                "best_score": int(group["best_score"]),
+                "method_label": ", ".join(methods) if methods else "raw",
+                "count": len(group_lines),
+                "priced_count": int(group["priced_count"]),
+            }
+        )
+    return sorted(
+        grouped,
+        key=lambda item: (
+            1 if str(item["label"]).startswith("Lage kwaliteit") else 0,
+            -int(item["best_score"]),
+            -int(item["priced_count"]),
+            str(item["label"]).lower(),
+        ),
+    )
 
 
 def _normalization_candidate_groups(lines: list[BudgetLine]) -> list[dict[str, object]]:
@@ -1837,6 +1942,9 @@ def _flash_message(request: Request) -> str | None:
         "voorstel_gevalideerd": "Voorstel gevalideerd en toegevoegd aan het basiswoordenboek.",
         "term_toegevoegd": "Nieuwe normalisatieterm opgeslagen en opnieuw toegepast.",
         "normalisatie_bijgewerkt": "Alle regels zijn opnieuw genormaliseerd.",
+        "regels_opgeslagen": "Begrotingsregels opgeslagen en opnieuw genormaliseerd.",
+        "regels_verwijderd": "Geselecteerde begrotingsregels verwijderd.",
+        "regels_gevalideerd": "Begrotingsregels gevalideerd en document gemarkeerd als verwerkt.",
     }
     return messages.get(request.query_params.get("notice", ""))
 

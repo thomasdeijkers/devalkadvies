@@ -129,7 +129,7 @@
       {% if normalization_suggestions %}
         <div class="normalization-strip">
           <strong>Normalisatievoorstellen</strong>
-          {% for line in normalization_suggestions %}
+          {% for line in normalization_suggestions[:8] %}
             <span>{{ line.normalization_candidate }} <small>{{ line.normalization_score }}%</small></span>
           {% endfor %}
           <a class="mini-button" href="/normalisatie">Beheren</a>
@@ -137,7 +137,7 @@
       {% endif %}
       <form action="/documents/{{ document.id }}/budget-lines/bulk" method="post" class="budget-edit-form">
         <div class="budget-actions">
-          <span>{{ document.budget_lines|length }} regels gevonden</span>
+          <span>{{ document.budget_lines|length }} regels gevonden - {{ budget_line_groups|length }} normalisatiegroepen</span>
           <div>
             <button type="submit" name="action" value="delete_selected">Geselecteerde verwijderen</button>
             <button type="submit">Regels opslaan</button>
@@ -159,29 +159,43 @@
           <span>Score</span>
           <span>Weg</span>
         </div>
-        {% for line in document.budget_lines %}
-          <div class="budget-row editable" data-budget-row>
-            <input type="hidden" name="line_id" value="{{ line.id }}">
-            <input name="omschrijving_werkzaamheden" value="{{ line.omschrijving_werkzaamheden }}">
-            <input name="hoeveelheid" value="{{ line.hoeveelheid|amount }}">
-            <input name="eenheid" value="{{ line.eenheid or '' }}">
-            <input name="norm_arbeid" value="{{ line.norm_arbeid or '' }}">
-            <input name="uren" value="{{ line.uren or '' }}">
-            <input name="materiaal" value="{{ line.materiaal or '' }}">
-            <input name="materieel" value="{{ line.materieel or '' }}">
-            <input name="onderaannemer" value="{{ line.onderaannemer or '' }}">
-            <input name="eenheidsprijs" value="{{ line|unit_price|amount }}">
-            <input name="totaal_prijs_per_regel" value="{{ line.totaal_prijs_per_regel or '' }}">
-            <span class="line-score">
-              <mark class="confidence-badge {% if line.confidence < 60 %}low{% elif line.confidence < 80 %}mid{% else %}high{% endif %}">{{ line.confidence }}%</mark>
-              {% if line.normalization_candidate %}
-                <small title="{{ line.normalization_candidate }}">N {{ line.normalization_score }}%</small>
-              {% endif %}
-            </span>
-            <label class="delete-check" title="Deze regel verwijderen bij opslaan">
-              <input type="checkbox" name="delete_line_id" value="{{ line.id }}">
-            </label>
+        {% for group in budget_line_groups %}
+          {% set group_score_class = "high" if group.best_score >= 75 else "mid" if group.best_score >= 50 else "low" %}
+          <div class="budget-group-row">
+            <div>
+              <mark class="signal-pill {{ group_score_class }}">{{ group.best_score }}%</mark>
+              <strong>{{ group.label }}</strong>
+              <small>{{ group.count }} regels - {{ group.priced_count }} met prijs - {{ group.method_label }}</small>
+            </div>
           </div>
+          {% for line in group.lines %}
+            {% set suggestion = line.normalization_candidate or line.normalized_omschrijving %}
+            <div class="budget-row editable" data-budget-row>
+              <input type="hidden" name="line_id" value="{{ line.id }}">
+              <span class="description-cell">
+                <input name="omschrijving_werkzaamheden" value="{{ line.omschrijving_werkzaamheden }}" title="{{ line.omschrijving_werkzaamheden }}">
+                {% if suggestion and suggestion != line.omschrijving_werkzaamheden %}
+                  <small title="{{ suggestion }}">Voorstel: {{ suggestion }} · {{ line.normalization_score }}%</small>
+                {% endif %}
+              </span>
+              <input name="hoeveelheid" value="{{ line.hoeveelheid|quantity }}">
+              <input name="eenheid" value="{{ line.eenheid or '' }}">
+              <input name="norm_arbeid" value="{{ line.norm_arbeid|quantity }}">
+              <input name="uren" value="{{ line.uren|quantity }}">
+              <input name="materiaal" value="{{ line.materiaal|euro }}">
+              <input name="materieel" value="{{ line.materieel|euro }}">
+              <input name="onderaannemer" value="{{ line.onderaannemer|euro }}">
+              <input name="eenheidsprijs" value="{{ line|unit_price|euro }}">
+              <input name="totaal_prijs_per_regel" value="{{ line.totaal_prijs_per_regel|euro }}">
+              <span class="line-score">
+                <mark class="confidence-badge {% if line.confidence < 60 %}low{% elif line.confidence < 80 %}mid{% else %}high{% endif %}">{{ line.confidence }}%</mark>
+                <small>{{ line.normalization_method or "raw" }}</small>
+              </span>
+              <label class="delete-check" title="Deze regel verwijderen bij opslaan">
+                <input type="checkbox" name="delete_line_id" value="{{ line.id }}">
+              </label>
+            </div>
+          {% endfor %}
         {% endfor %}
       </div>
       </form>

@@ -1474,9 +1474,9 @@ textarea {
 
 .detail-grid > .panel:first-child {
   display: grid;
-  grid-template-columns: minmax(260px, 0.75fr) minmax(360px, 1.25fr);
-  gap: 12px 16px;
-  padding: 18px;
+  grid-template-columns: minmax(280px, 0.62fr) minmax(520px, 1.38fr);
+  gap: 8px 14px;
+  padding: 14px;
 }
 
 .detail-grid > .panel:first-child .back-link,
@@ -1488,8 +1488,9 @@ textarea {
 }
 
 .detail-grid > .panel:first-child h1 {
-  margin: 8px 0 4px;
-  font-size: clamp(24px, 3vw, 34px);
+  margin: 4px 0 2px;
+  font-size: clamp(20px, 2vw, 28px);
+  line-height: 1.18;
 }
 
 .detail-grid > .panel:first-child .status-form,
@@ -1499,7 +1500,7 @@ textarea {
 
 .back-link {
   display: inline-block;
-  margin-bottom: 12px;
+  margin-bottom: 6px;
   color: #8bd5e6;
   font-weight: 900;
 }
@@ -1527,7 +1528,19 @@ textarea {
 .meta-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-top: 14px;
+  margin-top: 8px;
+}
+
+.detail-grid > .panel:first-child .status-form {
+  flex-wrap: wrap;
+}
+
+.detail-grid > .panel:first-child .status-form button,
+.detail-grid > .panel:first-child .status-form .button-link,
+.detail-grid > .panel:first-child .meta-form button {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
 }
 
 .select-action {
@@ -1632,6 +1645,12 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 18;
+  margin: -4px 0 0;
+  padding: 8px 0;
+  background: linear-gradient(135deg, rgba(22, 55, 95, 0.98), rgba(14, 40, 72, 0.98));
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
@@ -1650,18 +1669,20 @@ textarea {
 
 .budget-table {
   overflow-x: auto;
+  max-height: calc(100vh - 170px);
+  overflow-y: auto;
   border: 1px solid var(--line);
   border-radius: 7px;
 }
 
 .budget-row {
   display: grid;
-  grid-template-columns: minmax(250px, 1.45fr) 78px 62px 74px 74px 90px 90px 90px 108px 108px 82px 44px;
-  gap: 8px;
+  grid-template-columns: minmax(300px, 1.6fr) 78px 62px 72px 72px 96px 96px 96px 118px 118px 76px 38px;
+  gap: 6px;
   align-items: center;
-  min-width: 1140px;
-  min-height: 38px;
-  padding: 6px 10px;
+  min-width: 1250px;
+  min-height: 34px;
+  padding: 4px 8px;
   border-top: 1px solid rgba(126, 169, 219, 0.18);
 }
 
@@ -1672,9 +1693,25 @@ textarea {
 }
 
 .budget-row input {
-  min-height: 28px;
-  padding: 5px 7px;
-  font-size: 12px;
+  min-height: 27px;
+  padding: 4px 7px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.description-cell {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.description-cell small {
+  overflow: hidden;
+  color: #8bd5e6;
+  font-size: 10px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .delete-check {
@@ -1701,6 +1738,35 @@ textarea {
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.budget-group-row {
+  position: sticky;
+  top: 35px;
+  z-index: 14;
+  min-width: 1250px;
+  padding: 7px 8px;
+  border-top: 1px solid rgba(126, 169, 219, 0.22);
+  border-bottom: 1px solid rgba(126, 169, 219, 0.16);
+  background: linear-gradient(90deg, rgba(19, 57, 88, 0.98), rgba(11, 38, 65, 0.98));
+}
+
+.budget-group-row > div {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.budget-group-row strong {
+  color: #fff;
+}
+
+.budget-group-row small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .normalization-strip {
@@ -1747,6 +1813,9 @@ textarea {
 }
 
 .budget-head {
+  position: sticky;
+  top: 0;
+  z-index: 16;
   color: var(--muted);
   background: rgba(255, 255, 255, 0.05);
   font-size: 11px;
@@ -1826,6 +1895,20 @@ pre {
 @media (max-width: 1100px) {
   .app-layout {
     grid-template-columns: 1fr;
+  }
+
+  .detail-grid > .panel:first-child {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-grid > .panel:first-child .back-link,
+  .detail-grid > .panel:first-child .eyebrow,
+  .detail-grid > .panel:first-child h1,
+  .detail-grid > .panel:first-child .meta-line,
+  .detail-grid > .panel:first-child .note,
+  .detail-grid > .panel:first-child .status-form,
+  .detail-grid > .panel:first-child .meta-form {
+    grid-column: 1;
   }
 
   .sidebar {
