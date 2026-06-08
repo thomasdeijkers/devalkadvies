@@ -99,13 +99,28 @@ def calculated_unit_price(line: BudgetLine) -> Decimal | None:
             return line.totaal_prijs_per_regel / line.hoeveelheid
         except (InvalidOperation, ZeroDivisionError):
             return line.eenheidsprijs
-    return line.eenheidsprijs
+    return line.eenheidsprijs or _price_component_total(line)
+
+
+def calculated_line_total(line: BudgetLine) -> Decimal | None:
+    if line.totaal_prijs_per_regel is not None:
+        return Decimal(str(line.totaal_prijs_per_regel))
+    unit_price = calculated_unit_price(line)
+    if unit_price is None:
+        return None
+    if line.hoeveelheid not in {None, 0}:
+        try:
+            return Decimal(str(line.hoeveelheid)) * Decimal(str(unit_price))
+        except InvalidOperation:
+            return None
+    return Decimal(str(unit_price))
 
 
 templates.env.filters["euro"] = euro
 templates.env.filters["amount"] = amount
 templates.env.filters["quantity"] = quantity
 templates.env.filters["unit_price"] = calculated_unit_price
+templates.env.filters["line_total"] = calculated_line_total
 
 
 @app.on_event("startup")
@@ -1167,6 +1182,8 @@ def document_detail(
     if document is None:
         raise HTTPException(status_code=404, detail="Document niet gevonden.")
 
+    if _normalize_document_line_prices(document):
+        session.commit()
     budget_line_groups = _budget_line_groups(document.budget_lines)
     assessment_templates = session.scalars(
         select(AssessmentTemplate).where(AssessmentTemplate.status == "active").order_by(AssessmentTemplate.created_at.desc())
@@ -1349,6 +1366,7 @@ async def update_budget_lines_bulk(
     form = await request.form()
     line_ids = form.getlist("line_id")
     delete_line_ids = {str(value) for value in form.getlist("delete_line_id")}
+    action = str(form.get("action") or "save")
     updated_lines: list[BudgetLine] = []
     for index, raw_line_id in enumerate(line_ids):
         try:
@@ -1359,7 +1377,7 @@ async def update_budget_lines_bulk(
         line = session.get(BudgetLine, line_id)
         if line is None or line.document_id != document_id:
             continue
-        if str(line_id) in delete_line_ids:
+        if action == "delete_selected" and str(line_id) in delete_line_ids:
             session.delete(line)
             continue
 
@@ -1379,10 +1397,17 @@ async def update_budget_lines_bulk(
 
     if updated_lines:
         apply_normalization(session, updated_lines)
-    action = str(form.get("action") or "save")
     if action == "validate":
         document.status = "processed"
         notice = "regels_gevalideerd"
+    elif action == "add_to_references":
+        added_count = _add_budget_lines_to_references(
+            session,
+            document,
+            [line for line in updated_lines if str(line.id) in delete_line_ids],
+        )
+        document.status = "needs_review"
+        notice = "kengetallen_toegevoegd" if added_count else "geen_kengetallen_geselecteerd"
     elif action != "delete_selected":
         document.status = "needs_review"
         notice = "regels_opgeslagen"
@@ -1457,6 +1482,8 @@ def export_document(document_id: int, session: Session = Depends(get_session)) -
     if document is None:
         raise HTTPException(status_code=404, detail="Document niet gevonden.")
 
+    if _normalize_document_line_prices(document):
+        session.commit()
     stream = budget_document_to_xlsx(document)
     filename = f"begroting-{document.id}.xlsx"
     return StreamingResponse(
@@ -1472,6 +1499,8 @@ def export_control_model(document_id: int, session: Session = Depends(get_sessio
     if document is None:
         raise HTTPException(status_code=404, detail="Document niet gevonden.")
 
+    if _normalize_document_line_prices(document):
+        session.commit()
     stream = control_model_document_to_xlsx(document)
     filename = f"controlemodel-{document.id}.xlsx"
     return StreamingResponse(
@@ -1491,6 +1520,8 @@ def export_screening_template(
     if document is None:
         raise HTTPException(status_code=404, detail="Document niet gevonden.")
 
+    if _normalize_document_line_prices(document):
+        session.commit()
     template = _template_for_document(session, document, template_id)
     if template and template.stored_filename:
         template_path = settings.upload_dir / template.stored_filename
@@ -1786,6 +1817,7 @@ def _budget_line_groups(lines: list[BudgetLine]) -> list[dict[str, object]]:
 
 def _document_total_context(document: IncomingDocument) -> dict[str, object]:
     line_total = _budget_line_total(document.budget_lines)
+    quantity_total = _budget_quantity_total(document.budget_lines)
     source_total, source_label = _source_total_from_document(document)
     difference = None
     difference_abs = None
@@ -1805,6 +1837,7 @@ def _document_total_context(document: IncomingDocument) -> dict[str, object]:
             match_label = "Controleer verschil"
     return {
         "line_total": line_total,
+        "quantity_total": quantity_total,
         "source_total": source_total,
         "source_label": source_label,
         "difference": difference,
@@ -1818,15 +1851,32 @@ def _budget_line_total(lines: list[BudgetLine]) -> Decimal:
     usable_lines = [
         line
         for line in lines
-        if line.totaal_prijs_per_regel is not None
-        and line.regel_type not in {"hoofdstuk", "post", "subtotaal", "totaal"}
+        if line.regel_type not in {"hoofdstuk", "post", "subtotaal", "totaal"}
         and not is_noise_line(line.omschrijving_werkzaamheden)
+        and calculated_line_total(line) is not None
     ]
     if not usable_lines:
-        usable_lines = [line for line in lines if line.totaal_prijs_per_regel is not None]
+        usable_lines = [line for line in lines if calculated_line_total(line) is not None]
     total = Decimal("0")
     for line in usable_lines:
-        total += Decimal(str(line.totaal_prijs_per_regel or 0))
+        total += Decimal(str(calculated_line_total(line) or 0))
+    return total
+
+
+def _budget_quantity_total(lines: list[BudgetLine]) -> Decimal:
+    total = Decimal("0")
+    for line in lines:
+        if line.regel_type in {"hoofdstuk", "post", "subtotaal", "totaal"}:
+            continue
+        if is_noise_line(line.omschrijving_werkzaamheden):
+            continue
+        unit_price = calculated_unit_price(line)
+        if line.hoeveelheid in {None, 0} or unit_price is None:
+            continue
+        try:
+            total += Decimal(str(line.hoeveelheid)) * Decimal(str(unit_price))
+        except InvalidOperation:
+            continue
     return total
 
 
@@ -2205,6 +2255,97 @@ def _run_job(session: Session, job: ScheduledJob) -> int:
     raise ValueError("Onbekend jobtype.")
 
 
+def _add_budget_lines_to_references(
+    session: Session,
+    document: IncomingDocument,
+    lines: list[BudgetLine],
+) -> int:
+    dataset = _assessment_reference_dataset(session)
+    next_line_number = (
+        session.scalar(
+            select(func.max(ReferenceLine.line_number)).where(ReferenceLine.dataset_id == dataset.id)
+        )
+        or 0
+    ) + 1
+    added_lines: list[ReferenceLine] = []
+    project = document.project
+    project_name = project.name if project else document.project_name
+    relation_name = project.client.name if project and project.client else None
+
+    for line in lines:
+        description = (line.omschrijving_werkzaamheden or "").strip()
+        unit_price = calculated_unit_price(line)
+        if not description or unit_price is None or is_noise_line(description):
+            continue
+        marker = f"budget_line:{line.id}"
+        exists = session.scalar(
+            select(ReferenceLine.id)
+            .where(ReferenceLine.dataset_id == dataset.id)
+            .where(ReferenceLine.raw_text == marker)
+            .limit(1)
+        )
+        if exists:
+            continue
+        reference_line = ReferenceLine(
+            dataset_id=dataset.id,
+            line_number=next_line_number,
+            regel_type=line.regel_type,
+            niveau=line.niveau,
+            hoofdstuk_code=line.hoofdstuk_code,
+            hoofdstuk_omschrijving=line.hoofdstuk_omschrijving,
+            post_code=line.post_code,
+            project_name=project_name,
+            relation_name=relation_name,
+            document_date=document.created_at,
+            omschrijving_werkzaamheden=description,
+            hoeveelheid=line.hoeveelheid,
+            eenheid=line.eenheid,
+            norm_arbeid=line.norm_arbeid,
+            uren=line.uren,
+            materiaal=line.materiaal,
+            materieel=line.materieel,
+            onderaannemer=line.onderaannemer,
+            totaal_prijs_per_regel=calculated_line_total(line),
+            eenheidsprijs=unit_price,
+            bron_pagina=line.bron_pagina,
+            normalized_key=line.normalized_key,
+            normalized_omschrijving=line.normalized_omschrijving,
+            normalization_method=line.normalization_method,
+            normalization_score=line.normalization_score,
+            normalization_candidate=line.normalization_candidate,
+            confidence=max(line.confidence or 0, 80),
+            raw_text=marker,
+        )
+        session.add(reference_line)
+        added_lines.append(reference_line)
+        next_line_number += 1
+
+    if added_lines:
+        apply_normalization(session, added_lines)
+    return len(added_lines)
+
+
+def _assessment_reference_dataset(session: Session) -> ReferenceDataset:
+    dataset_name = "Beoordelingen - gevalideerde kengetallen"
+    dataset = session.scalar(
+        select(ReferenceDataset)
+        .where(ReferenceDataset.name == dataset_name)
+        .where(ReferenceDataset.source == "beoordeling")
+        .limit(1)
+    )
+    if dataset is not None:
+        return dataset
+    dataset = ReferenceDataset(
+        name=dataset_name,
+        source="beoordeling",
+        notes="Regels die vanuit begrotingsbeoordelingen als kengetal zijn toegevoegd.",
+        status="active",
+    )
+    session.add(dataset)
+    session.flush()
+    return dataset
+
+
 def _date_or_none(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -2221,12 +2362,49 @@ def _form_value(form, key: str, index: int) -> str:
     return str(values[index] or "")
 
 
-def _normalize_line_prices(line: BudgetLine) -> None:
+def _normalize_document_line_prices(document: IncomingDocument) -> bool:
+    changed = False
+    for line in document.budget_lines:
+        changed = _normalize_line_prices(line) or changed
+    return changed
+
+
+def _normalize_line_prices(line: BudgetLine) -> bool:
+    changed = False
+    component_total = _price_component_total(line)
+    if line.eenheidsprijs is None and component_total is not None:
+        line.eenheidsprijs = component_total
+        changed = True
     if line.totaal_prijs_per_regel is not None and line.hoeveelheid not in {None, 0}:
         try:
-            line.eenheidsprijs = line.totaal_prijs_per_regel / line.hoeveelheid
+            unit_price = line.totaal_prijs_per_regel / line.hoeveelheid
+            if line.eenheidsprijs != unit_price:
+                line.eenheidsprijs = unit_price
+                changed = True
         except (InvalidOperation, ZeroDivisionError):
             pass
+    elif line.totaal_prijs_per_regel is None and line.eenheidsprijs is not None:
+        if line.hoeveelheid not in {None, 0}:
+            try:
+                line.totaal_prijs_per_regel = Decimal(str(line.hoeveelheid)) * Decimal(str(line.eenheidsprijs))
+                changed = True
+            except InvalidOperation:
+                pass
+        else:
+            line.totaal_prijs_per_regel = line.eenheidsprijs
+            changed = True
+    return changed
+
+
+def _price_component_total(line: BudgetLine) -> Decimal | None:
+    total = Decimal("0")
+    has_component = False
+    for value in (line.materiaal, line.materieel, line.onderaannemer):
+        if value is None:
+            continue
+        total += Decimal(str(value))
+        has_component = True
+    return total if has_component else None
 
 
 def _int_or_none(value: str | int | None) -> int | None:
@@ -2247,6 +2425,8 @@ def _flash_message(request: Request) -> str | None:
         "regels_opgeslagen": "Begrotingsregels opgeslagen en opnieuw genormaliseerd.",
         "regels_verwijderd": "Geselecteerde begrotingsregels verwijderd.",
         "regels_gevalideerd": "Begrotingsregels gevalideerd en document gemarkeerd als verwerkt.",
+        "kengetallen_toegevoegd": "Geselecteerde regels zijn toegevoegd aan de kengetallen-database.",
+        "geen_kengetallen_geselecteerd": "Geen bruikbare geselecteerde regels met eenheidsprijs gevonden.",
     }
     return messages.get(request.query_params.get("notice", ""))
 

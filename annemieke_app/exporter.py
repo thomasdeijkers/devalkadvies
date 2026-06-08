@@ -82,7 +82,7 @@ def budget_document_to_xlsx(document: IncomingDocument) -> BytesIO:
                 line.materiaal,
                 line.materieel,
                 line.onderaannemer,
-                line.totaal_prijs_per_regel,
+                _line_total_value(line),
                 _unit_price(line),
             ]
         )
@@ -167,7 +167,7 @@ def control_model_document_to_xlsx(document: IncomingDocument) -> BytesIO:
                 line.materiaal,
                 line.materieel,
                 line.onderaannemer,
-                line.totaal_prijs_per_regel,
+                _line_total_value(line),
                 line.bron_pagina,
                 line.confidence,
             ]
@@ -248,7 +248,7 @@ def selected_budget_lines_to_xlsx(lines: list[BudgetLine]) -> BytesIO:
                 _display_amount(line.hoeveelheid),
                 line.eenheid or "",
                 _unit_price(line),
-                line.totaal_prijs_per_regel,
+                _line_total_value(line),
                 line.confidence,
                 document.status,
             ]
@@ -291,24 +291,45 @@ def _unit_price(line: BudgetLine) -> Decimal | None:
             return line.totaal_prijs_per_regel / line.hoeveelheid
         except (InvalidOperation, ZeroDivisionError):
             return line.eenheidsprijs
-    return line.eenheidsprijs
+    return line.eenheidsprijs or _price_component_total(line)
+
+
+def _line_total_value(line: BudgetLine) -> Decimal | None:
+    unit_price = _unit_price(line)
+    if line.hoeveelheid not in {None, 0} and unit_price is not None:
+        try:
+            return Decimal(str(line.hoeveelheid)) * Decimal(str(unit_price))
+        except InvalidOperation:
+            return line.totaal_prijs_per_regel
+    return line.totaal_prijs_per_regel or unit_price
 
 
 def _line_total(lines: list[BudgetLine]) -> Decimal:
     usable_lines = [
         line
         for line in lines
-        if line.totaal_prijs_per_regel is not None
+        if _line_total_value(line) is not None
         and line.regel_type not in {"hoofdstuk", "post", "subtotaal", "totaal"}
         and not is_noise_line(line.omschrijving_werkzaamheden)
     ]
     if not usable_lines:
-        usable_lines = [line for line in lines if line.totaal_prijs_per_regel is not None]
+        usable_lines = [line for line in lines if _line_total_value(line) is not None]
 
     total = Decimal("0")
     for line in usable_lines:
-        total += Decimal(str(line.totaal_prijs_per_regel or 0))
+        total += Decimal(str(_line_total_value(line) or 0))
     return total
+
+
+def _price_component_total(line: BudgetLine) -> Decimal | None:
+    total = Decimal("0")
+    has_component = False
+    for value in (line.materiaal, line.materieel, line.onderaannemer):
+        if value is None:
+            continue
+        total += Decimal(str(value))
+        has_component = True
+    return total if has_component else None
 
 
 def _display_amount(value: Decimal | None) -> int | float | None:

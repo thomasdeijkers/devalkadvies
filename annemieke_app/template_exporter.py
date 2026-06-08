@@ -26,6 +26,11 @@ FIELD_ALIASES = {
     "onderaannemer": {"o.a.", "oa", "onderaannemer"},
     "eenheidsprijs": {"eenheidsprijs", "ehprijs", "eindprijs", "prijs per eenheid"},
     "totaal_prijs_per_regel": {"totaal", "totaalprijs", "totaal prijs per regel"},
+    "categorie_algemeen": {"algemeen"},
+    "categorie_abk": {"abk"},
+    "categorie_bouwkundig": {"bouwkundig"},
+    "categorie_installatie": {"installatie"},
+    "categorie_optimalisatie": {"optimalisatie"},
 }
 
 MIN_HEADER_SCORE = 5
@@ -144,6 +149,8 @@ def _copy_row_style(sheet: Worksheet, source_row: int, target_row: int) -> None:
 
 
 def _write_line(sheet: Worksheet, row: int, mapping: ColumnMapping, line: BudgetLine) -> None:
+    line_total = _line_total(line)
+    category_field = _category_field(line)
     values = {
         "hoofdstuk_code": line.hoofdstuk_code or line.post_code,
         "post_code": line.post_code or line.hoofdstuk_code,
@@ -156,7 +163,12 @@ def _write_line(sheet: Worksheet, row: int, mapping: ColumnMapping, line: Budget
         "materieel": line.materieel,
         "onderaannemer": line.onderaannemer,
         "eenheidsprijs": _unit_price(line),
-        "totaal_prijs_per_regel": line.totaal_prijs_per_regel,
+        "totaal_prijs_per_regel": line_total,
+        "categorie_algemeen": line_total if category_field == "categorie_algemeen" else None,
+        "categorie_abk": line_total if category_field == "categorie_abk" else None,
+        "categorie_bouwkundig": line_total if category_field == "categorie_bouwkundig" else None,
+        "categorie_installatie": line_total if category_field == "categorie_installatie" else None,
+        "categorie_optimalisatie": line_total if category_field == "categorie_optimalisatie" else None,
     }
     for field, value in values.items():
         for column in mapping.get(field, []):
@@ -227,4 +239,59 @@ def _unit_price(line: BudgetLine) -> Decimal | None:
             return line.totaal_prijs_per_regel / line.hoeveelheid
         except (InvalidOperation, ZeroDivisionError):
             return line.eenheidsprijs
-    return line.eenheidsprijs
+    return line.eenheidsprijs or _price_component_total(line)
+
+
+def _line_total(line: BudgetLine) -> Decimal | None:
+    unit_price = _unit_price(line)
+    if line.hoeveelheid not in {None, 0} and unit_price is not None:
+        try:
+            return Decimal(str(line.hoeveelheid)) * Decimal(str(unit_price))
+        except InvalidOperation:
+            return line.totaal_prijs_per_regel
+    return line.totaal_prijs_per_regel or unit_price
+
+
+def _price_component_total(line: BudgetLine) -> Decimal | None:
+    total = Decimal("0")
+    has_component = False
+    for value in (line.materiaal, line.materieel, line.onderaannemer):
+        if value is None:
+            continue
+        total += Decimal(str(value))
+        has_component = True
+    return total if has_component else None
+
+
+def _category_field(line: BudgetLine) -> str:
+    text = " ".join(
+        value
+        for value in (
+            line.normalized_omschrijving,
+            line.hoofdstuk_omschrijving,
+            line.omschrijving_werkzaamheden,
+        )
+        if value
+    ).lower()
+    if any(word in text for word in ("optimalisatie", "besparing", "bezuiniging", "alternatief")):
+        return "categorie_optimalisatie"
+    if any(
+        word in text
+        for word in (
+            "installatie",
+            "elektra",
+            "e installatie",
+            "w installatie",
+            "water",
+            "verwarming",
+            "ventilatie",
+            "luchtbehandeling",
+            "werktuigbouw",
+        )
+    ):
+        return "categorie_installatie"
+    if any(word in text for word in ("abk", "algemene bouwkosten", "bouwplaats", "bankgarantie", "verzekering")):
+        return "categorie_abk"
+    if any(word in text for word in ("algemeen", "uitgangspunt", "opruimen", "schoonmaken", "transport")):
+        return "categorie_algemeen"
+    return "categorie_bouwkundig"

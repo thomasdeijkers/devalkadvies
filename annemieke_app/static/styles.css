@@ -1542,16 +1542,16 @@ textarea {
 .review-totals {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 5px;
+  gap: 6px;
+  margin-top: 6px;
 }
 
 .total-chip {
   display: inline-flex;
-  gap: 5px;
-  align-items: baseline;
-  min-height: 25px;
-  padding: 3px 7px;
+  gap: 6px;
+  align-items: center;
+  min-height: 32px;
+  padding: 4px 8px;
   border: 1px solid rgba(126, 169, 219, 0.35);
   border-radius: 6px;
   background: rgba(4, 19, 38, 0.62);
@@ -1566,7 +1566,7 @@ textarea {
 
 .total-chip strong {
   color: #fff;
-  font-size: 12px;
+  font-size: 13px;
   white-space: nowrap;
 }
 
@@ -1578,23 +1578,23 @@ textarea {
 }
 
 .source-total-form {
-  gap: 5px;
-  padding-right: 5px;
+  gap: 6px;
+  padding-right: 6px;
 }
 
 .source-total-form input {
-  width: 112px;
-  min-height: 20px;
-  padding: 2px 6px;
+  width: 126px;
+  min-height: 26px;
+  padding: 3px 7px;
   border-radius: 5px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
   text-align: right;
 }
 
 .source-total-form button {
-  min-height: 21px;
-  padding: 0 7px;
+  min-height: 26px;
+  padding: 0 8px;
   border-radius: 5px;
   font-size: 10px;
 }

@@ -32,6 +32,10 @@
             <small>Regels</small>
             <strong>{{ total_context.line_total|euro }}</strong>
           </span>
+          <span class="total-chip">
+            <small>Hvh x ehprijs</small>
+            <strong>{{ total_context.quantity_total|euro }}</strong>
+          </span>
           <span class="total-chip {{ total_context.match_class }}">
             <small>Verschil</small>
             <strong>{% if total_context.difference is not none %}{{ total_context.difference|euro }}{% else %}n.t.b.{% endif %}</strong>
@@ -171,6 +175,7 @@
           <span>{{ document.budget_lines|length }} regels - {{ budget_line_groups|length }} groepen</span>
           <div>
             <button form="budget-lines-form" type="submit" name="action" value="delete_selected">Geselecteerde verwijderen</button>
+            <button form="budget-lines-form" type="submit" name="action" value="add_to_references">Naar kengetallen</button>
             <button form="budget-lines-form" type="submit">Regels opslaan</button>
             <button form="budget-lines-form" type="submit" name="action" value="validate">Valideren</button>
           </div>
@@ -200,7 +205,7 @@
           <span>Eenheidsprijs</span>
           <span>Totaal</span>
           <span>Score</span>
-          <span>Weg</span>
+          <span>Selectie</span>
         </div>
         {% for group in budget_line_groups %}
           {% set group_score_class = "high" if group.best_score >= 75 else "mid" if group.best_score >= 50 else "low" %}
@@ -229,12 +234,12 @@
               <input name="materieel" value="{{ line.materieel|euro }}">
               <input name="onderaannemer" value="{{ line.onderaannemer|euro }}">
               <input name="eenheidsprijs" value="{{ line|unit_price|euro }}">
-              <input name="totaal_prijs_per_regel" value="{{ line.totaal_prijs_per_regel|euro }}">
+              <input name="totaal_prijs_per_regel" value="{{ line|line_total|euro }}">
               <span class="line-score">
                 <mark class="confidence-badge {% if line.confidence < 60 %}low{% elif line.confidence < 80 %}mid{% else %}high{% endif %}">{{ line.confidence }}%</mark>
                 <small>{{ line.normalization_method or "raw" }}</small>
               </span>
-              <label class="delete-check" title="Deze regel verwijderen bij opslaan">
+              <label class="delete-check" title="Selecteer voor verwijderen of opnemen als kengetal">
                 <input type="checkbox" name="delete_line_id" value="{{ line.id }}">
               </label>
             </div>
