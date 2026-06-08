@@ -1,4 +1,5 @@
 import os
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
@@ -48,7 +49,9 @@ app = FastAPI(title=settings.app_name)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
 logo_path = Path(__file__).resolve().parent.parent / "logo.webp"
+m3e_logo_path = Path(__file__).resolve().parent.parent / "logo_M3E.jpg"
 APP_STARTED_AT = time.time()
+MONEY_TEXT_PATTERN = re.compile(r"(?:€\s*)?-?\d{1,3}(?:[.\s]\d{3})*(?:,\d{2})|-?\d+(?:[.,]\d{2})")
 
 
 def euro(value: Decimal | int | float | str | None) -> str:
@@ -311,6 +314,13 @@ def _render_workspace(
 
 @app.get("/logo.webp")
 def logo() -> FileResponse:
+    return FileResponse(logo_path, media_type="image/webp")
+
+
+@app.get("/logo-m3e.jpg")
+def m3e_logo() -> FileResponse:
+    if m3e_logo_path.exists():
+        return FileResponse(m3e_logo_path, media_type="image/jpeg")
     return FileResponse(logo_path, media_type="image/webp")
 
 
@@ -1036,6 +1046,9 @@ def document_detail(
         raise HTTPException(status_code=404, detail="Document niet gevonden.")
 
     budget_line_groups = _budget_line_groups(document.budget_lines)
+    assessment_templates = session.scalars(
+        select(AssessmentTemplate).where(AssessmentTemplate.status == "active").order_by(AssessmentTemplate.created_at.desc())
+    ).all()
     return templates.TemplateResponse(
         request=request,
         name="document_detail.html",
@@ -1044,6 +1057,9 @@ def document_detail(
             "app_name": settings.app_name,
             "document": document,
             "budget_line_groups": budget_line_groups,
+            "total_context": _document_total_context(document),
+            "assessment_templates": assessment_templates,
+            "selected_template": _template_for_document(session, document),
             "flash_message": _flash_message(request),
             "project_options": session.scalars(select(Project).order_by(Project.name)).all(),
             "relation_options": session.scalars(select(Relation).order_by(Relation.name)).all(),
@@ -1326,16 +1342,20 @@ def export_control_model(document_id: int, session: Session = Depends(get_sessio
 
 
 @app.get("/documents/{document_id}/screening.xlsx")
-def export_screening_template(document_id: int, session: Session = Depends(get_session)) -> StreamingResponse:
+def export_screening_template(
+    document_id: int,
+    template_id: str = "",
+    session: Session = Depends(get_session),
+) -> StreamingResponse:
     document = session.get(IncomingDocument, document_id)
     if document is None:
         raise HTTPException(status_code=404, detail="Document niet gevonden.")
 
-    template = _template_for_document(session, document)
+    template = _template_for_document(session, document, template_id)
     if template and template.stored_filename:
         template_path = settings.upload_dir / template.stored_filename
         if template_path.exists():
-            stream = fill_screening_template(document, template_path, template.target_sheet)
+            stream = fill_screening_template(document, template_path, template.target_sheet, m3e_logo_path)
             filename = template.output_filename or f"screening-{document.id}.xlsx"
             return StreamingResponse(
                 stream,
@@ -1603,6 +1623,98 @@ def _budget_line_groups(lines: list[BudgetLine]) -> list[dict[str, object]]:
             str(item["label"]).lower(),
         ),
     )
+
+
+def _document_total_context(document: IncomingDocument) -> dict[str, object]:
+    line_total = _budget_line_total(document.budget_lines)
+    source_total, source_label = _source_total_from_document(document)
+    difference = None
+    difference_abs = None
+    match_class = "missing"
+    match_label = "Origineel totaal niet herkend"
+    if source_total is not None:
+        difference = line_total - source_total
+        difference_abs = abs(difference)
+        if difference_abs <= Decimal("1.00"):
+            match_class = "ok"
+            match_label = "Sluit aan"
+        elif difference_abs <= max(Decimal("25.00"), abs(source_total) * Decimal("0.0025")):
+            match_class = "warn"
+            match_label = "Klein verschil"
+        else:
+            match_class = "error"
+            match_label = "Controleer verschil"
+    return {
+        "line_total": line_total,
+        "source_total": source_total,
+        "source_label": source_label,
+        "difference": difference,
+        "difference_abs": difference_abs,
+        "match_class": match_class,
+        "match_label": match_label,
+    }
+
+
+def _budget_line_total(lines: list[BudgetLine]) -> Decimal:
+    usable_lines = [
+        line
+        for line in lines
+        if line.totaal_prijs_per_regel is not None
+        and line.regel_type not in {"hoofdstuk", "post", "subtotaal", "totaal"}
+        and not is_noise_line(line.omschrijving_werkzaamheden)
+    ]
+    if not usable_lines:
+        usable_lines = [line for line in lines if line.totaal_prijs_per_regel is not None]
+    total = Decimal("0")
+    for line in usable_lines:
+        total += Decimal(str(line.totaal_prijs_per_regel or 0))
+    return total
+
+
+def _source_total_from_document(document: IncomingDocument) -> tuple[Decimal | None, str | None]:
+    candidates: list[tuple[int, Decimal, str]] = []
+    strong_keywords = ("eindtotaal", "totaal", "aanneemsom", "inschrijfsom", "bouwkosten", "begrotingstotaal")
+
+    for field in document.fields:
+        haystack = f"{field.field_name} {field.field_value}".lower()
+        amount_value = _last_amount_decimal(field.field_value)
+        if amount_value is None:
+            continue
+        if any(keyword in haystack for keyword in strong_keywords):
+            candidates.append((3, amount_value, f"veld: {field.field_name}"))
+        elif field.field_name.lower() == "bedrag":
+            candidates.append((1, amount_value, "veld: bedrag"))
+
+    for raw_line in (document.parsed_text or "").splitlines():
+        line = " ".join(raw_line.split())
+        lowered = line.lower()
+        if not any(keyword in lowered for keyword in strong_keywords):
+            continue
+        amount_value = _last_amount_decimal(line)
+        if amount_value is not None:
+            candidates.append((2, amount_value, "originele tekst"))
+
+    for line in document.budget_lines:
+        description = (line.omschrijving_werkzaamheden or "").lower()
+        if line.totaal_prijs_per_regel is not None and (
+            line.regel_type == "totaal" or any(keyword in description for keyword in strong_keywords)
+        ):
+            candidates.append((2, Decimal(str(line.totaal_prijs_per_regel)), "totaalregel"))
+
+    if not candidates:
+        return None, None
+    candidates.sort(key=lambda item: (item[0], abs(item[1])), reverse=True)
+    _, amount_value, label = candidates[0]
+    return amount_value, label
+
+
+def _last_amount_decimal(value: str | None) -> Decimal | None:
+    matches = MONEY_TEXT_PATTERN.findall(str(value or ""))
+    for match in reversed(matches):
+        parsed = _decimal_or_none(match)
+        if parsed is not None:
+            return parsed
+    return None
 
 
 def _normalization_candidate_groups(lines: list[BudgetLine]) -> list[dict[str, object]]:
@@ -1878,7 +1990,16 @@ def _latest_template(session: Session) -> AssessmentTemplate | None:
     ).first()
 
 
-def _template_for_document(session: Session, document: IncomingDocument) -> AssessmentTemplate | None:
+def _template_for_document(
+    session: Session,
+    document: IncomingDocument,
+    template_id: str | int | None = None,
+) -> AssessmentTemplate | None:
+    explicit_template_id = _int_or_none(template_id) if template_id is not None else None
+    if explicit_template_id:
+        template = session.get(AssessmentTemplate, explicit_template_id)
+        if template is not None:
+            return template
     for part in (document.parser_notes or "").split("|"):
         key, _, value = part.strip().partition("=")
         if key == "template_id":

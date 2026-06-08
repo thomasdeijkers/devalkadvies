@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from openpyxl import load_workbook
+from openpyxl.drawing.image import Image as ExcelImage
 from openpyxl.worksheet.worksheet import Worksheet
 
 from .models import BudgetLine, IncomingDocument
@@ -23,14 +24,21 @@ FIELD_ALIASES = {
     "materiaal": {"materiaal"},
     "materieel": {"materieel"},
     "onderaannemer": {"o.a.", "oa", "onderaannemer"},
-    "eenheidsprijs": {"eenheidsprijs", "ehprijs", "prijs per eenheid"},
-    "totaal_prijs_per_regel": {"eindprijs", "totaal", "totaalprijs", "totaal prijs per regel"},
+    "eenheidsprijs": {"eenheidsprijs", "ehprijs", "eindprijs", "prijs per eenheid"},
+    "totaal_prijs_per_regel": {"totaal", "totaalprijs", "totaal prijs per regel"},
 }
 
 MIN_HEADER_SCORE = 5
 
+ColumnMapping = dict[str, list[int]]
 
-def fill_screening_template(document: IncomingDocument, template_path: Path, target_sheet: str | None = None) -> BytesIO:
+
+def fill_screening_template(
+    document: IncomingDocument,
+    template_path: Path,
+    target_sheet: str | None = None,
+    logo_path: Path | None = None,
+) -> BytesIO:
     workbook = load_workbook(template_path)
     sheet = workbook[target_sheet] if target_sheet and target_sheet in workbook.sheetnames else _best_sheet(workbook.worksheets)
     header_row, mapping = _find_header_row(sheet)
@@ -55,6 +63,7 @@ def fill_screening_template(document: IncomingDocument, template_path: Path, tar
         if line.regel_type in {"hoofdstuk", "post"}:
             _mark_structure_row(sheet, row, mapping, line)
 
+    _write_document_header(sheet, document, logo_path)
     stream = BytesIO()
     workbook.save(stream)
     stream.seek(0)
@@ -62,6 +71,11 @@ def fill_screening_template(document: IncomingDocument, template_path: Path, tar
 
 
 def _best_sheet(sheets: list[Worksheet]) -> Worksheet:
+    for sheet in sheets:
+        if sheet.title.strip().lower() == "screening":
+            header_row, mapping = _find_header_row(sheet)
+            if mapping:
+                return sheet
     scored = []
     for sheet in sheets:
         header_row, mapping = _find_header_row(sheet)
@@ -70,29 +84,30 @@ def _best_sheet(sheets: list[Worksheet]) -> Worksheet:
     return scored[0][2]
 
 
-def _find_header_row(sheet: Worksheet) -> tuple[int, dict[str, int]]:
+def _find_header_row(sheet: Worksheet) -> tuple[int, ColumnMapping]:
     best_row = 0
-    best_mapping: dict[str, int] = {}
+    best_score = 0
+    best_mapping: ColumnMapping = {}
     max_scan = min(sheet.max_row, 80)
     for row in range(1, max_scan + 1):
         values = [_normalize(sheet.cell(row=row, column=column).value) for column in range(1, sheet.max_column + 1)]
-        mapping: dict[str, int] = {}
+        mapping: ColumnMapping = {}
         for field, aliases in FIELD_ALIASES.items():
             for index, value in enumerate(values, start=1):
                 if value in aliases:
-                    mapping[field] = index
-                    break
-        score = len(mapping)
-        if "omschrijving_werkzaamheden" in mapping and score > len(best_mapping):
+                    mapping.setdefault(field, []).append(index)
+        score = len(mapping) + sum(max(0, len(columns) - 1) for columns in mapping.values())
+        if "omschrijving_werkzaamheden" in mapping and score > best_score:
             best_row = row
+            best_score = score
             best_mapping = mapping
     if len(best_mapping) < MIN_HEADER_SCORE:
         return 0, {}
     return best_row, best_mapping
 
 
-def _existing_body_end(sheet: Worksheet, start_row: int, mapping: dict[str, int]) -> int:
-    columns = list(mapping.values())
+def _existing_body_end(sheet: Worksheet, start_row: int, mapping: ColumnMapping) -> int:
+    columns = _mapped_columns(mapping)
     last_seen = start_row
     empty_streak = 0
     for row in range(start_row, min(sheet.max_row, start_row + 500) + 1):
@@ -107,9 +122,9 @@ def _existing_body_end(sheet: Worksheet, start_row: int, mapping: dict[str, int]
     return max(last_seen, start_row)
 
 
-def _clear_body(sheet: Worksheet, start_row: int, end_row: int, mapping: dict[str, int]) -> None:
+def _clear_body(sheet: Worksheet, start_row: int, end_row: int, mapping: ColumnMapping) -> None:
     for row in range(start_row, end_row + 1):
-        for column in mapping.values():
+        for column in _mapped_columns(mapping):
             sheet.cell(row=row, column=column).value = None
 
 
@@ -128,10 +143,10 @@ def _copy_row_style(sheet: Worksheet, source_row: int, target_row: int) -> None:
         target.protection = copy(source.protection)
 
 
-def _write_line(sheet: Worksheet, row: int, mapping: dict[str, int], line: BudgetLine) -> None:
+def _write_line(sheet: Worksheet, row: int, mapping: ColumnMapping, line: BudgetLine) -> None:
     values = {
-        "hoofdstuk_code": line.hoofdstuk_code,
-        "post_code": line.post_code,
+        "hoofdstuk_code": line.hoofdstuk_code or line.post_code,
+        "post_code": line.post_code or line.hoofdstuk_code,
         "omschrijving_werkzaamheden": line.omschrijving_werkzaamheden,
         "hoeveelheid": _amount(line.hoeveelheid),
         "eenheid": line.eenheid,
@@ -144,22 +159,50 @@ def _write_line(sheet: Worksheet, row: int, mapping: dict[str, int], line: Budge
         "totaal_prijs_per_regel": line.totaal_prijs_per_regel,
     }
     for field, value in values.items():
-        column = mapping.get(field)
-        if column:
+        for column in mapping.get(field, []):
             sheet.cell(row=row, column=column).value = value
 
 
-def _mark_structure_row(sheet: Worksheet, row: int, mapping: dict[str, int], line: BudgetLine) -> None:
-    description_column = mapping.get("omschrijving_werkzaamheden")
-    if description_column:
+def _mark_structure_row(sheet: Worksheet, row: int, mapping: ColumnMapping, line: BudgetLine) -> None:
+    description_columns = mapping.get("omschrijving_werkzaamheden", [])
+    for description_column in description_columns:
         prefix = line.hoofdstuk_code or line.post_code
         if prefix and not str(sheet.cell(row=row, column=description_column).value or "").startswith(prefix):
             sheet.cell(row=row, column=description_column).value = f"{prefix} {line.omschrijving_werkzaamheden}"
-    for column in mapping.values():
+    for column in _mapped_columns(mapping):
         cell = sheet.cell(row=row, column=column)
         font = copy(cell.font)
         font.bold = True
         cell.font = font
+
+
+def _write_document_header(sheet: Worksheet, document: IncomingDocument, logo_path: Path | None) -> None:
+    if sheet.title.strip().lower() != "screening":
+        return
+    if document.project_name:
+        _write_if_empty(sheet, "AK4", document.project_name)
+    if document.original_filename:
+        _write_if_empty(sheet, "AK5", document.original_filename)
+    if document.created_at:
+        _write_if_empty(sheet, "AN7", document.created_at.strftime("%d-%m-%Y"))
+    if logo_path and logo_path.exists() and not getattr(sheet, "_images", []):
+        try:
+            image = ExcelImage(str(logo_path))
+            image.width = 92
+            image.height = 46
+            sheet.add_image(image, "AK2")
+        except Exception:
+            pass
+
+
+def _write_if_empty(sheet: Worksheet, coordinate: str, value: str) -> None:
+    cell = sheet[coordinate]
+    if cell.value in {None, ""}:
+        cell.value = value
+
+
+def _mapped_columns(mapping: ColumnMapping) -> list[int]:
+    return sorted({column for columns in mapping.values() for column in columns})
 
 
 def _normalize(value: Any) -> str:

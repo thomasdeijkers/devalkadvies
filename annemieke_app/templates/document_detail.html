@@ -3,19 +3,91 @@
 {% block page_title %}Begroting controleren{% endblock %}
 
 {% block content %}
-<section class="detail-grid">
-  <article class="panel">
-    <a class="back-link" href="/">Terug naar overzicht</a>
-    <span class="eyebrow">Begroting controleren</span>
-    <h1>{{ document.original_filename }}</h1>
-    <div class="meta-line">
-      <span>{{ document.project_name or "Geen project gekoppeld" }}</span>
-      <mark class="status {{ document.status }}">{{ document.status }}</mark>
-      <span>{{ document.created_at.strftime("%d-%m-%Y %H:%M") if document.created_at else "" }}</span>
-    </div>
-    {% if document.parser_notes %}
-      <p class="note">{{ document.parser_notes }}</p>
-    {% endif %}
+<section class="detail-grid document-workbench">
+  <div class="review-sticky-zone">
+    <article class="panel review-compact-header">
+      <a class="back-link" href="/">Terug</a>
+      <span class="review-logo">
+        <img src="/logo-m3e.jpg" alt="M3E Bouwkosten Management">
+      </span>
+      <div class="review-title">
+        <span class="eyebrow">Begroting controleren</span>
+        <h1 title="{{ document.original_filename }}">{{ document.original_filename }}</h1>
+        <div class="meta-line">
+          <span>{{ document.project_name or "Geen project gekoppeld" }}</span>
+          <mark class="status {{ document.status }}">{{ document.status }}</mark>
+          <span>{{ document.created_at.strftime("%d-%m-%Y %H:%M") if document.created_at else "" }}</span>
+          {% if document.parser_notes %}
+            <span class="parser-note-inline">{{ document.parser_notes }}</span>
+          {% endif %}
+        </div>
+        <div class="review-totals">
+          <span class="total-chip">
+            <small>Originele input</small>
+            <strong>{% if total_context.source_total is not none %}{{ total_context.source_total|euro }}{% else %}-{% endif %}</strong>
+          </span>
+          <span class="total-chip">
+            <small>Regels</small>
+            <strong>{{ total_context.line_total|euro }}</strong>
+          </span>
+          <span class="total-chip {{ total_context.match_class }}">
+            <small>Verschil</small>
+            <strong>{% if total_context.difference is not none %}{{ total_context.difference|euro }}{% else %}n.t.b.{% endif %}</strong>
+            <em>{{ total_context.match_label }}</em>
+          </span>
+        </div>
+      </div>
+
+      <form action="/documents/{{ document.id }}/status" method="post" class="status-form compact-actions">
+        <button name="status" value="needs_review" type="submit">Te controleren</button>
+        <button name="status" value="archived" type="submit">Archiveren</button>
+        {% if document.status != "processing" %}
+          <a class="button-link" href="/documents/{{ document.id }}/export.xlsx">Excel</a>
+          <a class="button-link" href="/documents/{{ document.id }}/controlemodel.xlsx">Controlemodel</a>
+        {% endif %}
+      </form>
+      <form action="/documents/{{ document.id }}/reparse-openai" method="post" class="status-form compact-reparse">
+        <button type="submit">{% if document.status == "processing" %}Parser opnieuw starten{% else %}OpenAI herparse{% endif %}</button>
+      </form>
+      {% if document.status != "processing" %}
+        <form action="/documents/{{ document.id }}/screening.xlsx" method="get" class="template-export-form">
+          <select name="template_id" aria-label="Excel template">
+            <option value="">Laatste actieve template</option>
+            {% for template in assessment_templates %}
+              <option value="{{ template.id }}" {% if selected_template and selected_template.id == template.id %}selected{% endif %}>
+                {{ template.name }}{% if template.version %} - {{ template.version }}{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+          <button type="submit">Export Excel</button>
+        </form>
+      {% endif %}
+
+      <form action="/documents/{{ document.id }}/meta" method="post" class="meta-form compact-meta-form">
+        <label class="select-action">
+          <select name="project_id">
+            <option value="">Selecteer project</option>
+            {% for project in project_options %}
+              <option value="{{ project.id }}" {% if document.project_id == project.id %}selected{% endif %}>{{ project.project_number or "zonder nr" }} - {{ project.name }}</option>
+            {% endfor %}
+          </select>
+          <a href="/projects" class="mini-button">Nieuw</a>
+        </label>
+        <label class="select-action">
+          <select name="relation_id">
+            <option value="">Selecteer relatie</option>
+            {% for relation in relation_options %}
+              <option value="{{ relation.id }}" {% if document.project and document.project.client_relation_id == relation.id %}selected{% endif %}>{{ relation.name }}{% if relation.relation_type %} - {{ relation.relation_type }}{% endif %}</option>
+            {% endfor %}
+          </select>
+          <a href="/relations" class="mini-button">Nieuw</a>
+        </label>
+        <input name="project_name" value="{{ document.project_name or '' }}" placeholder="Projectnaam">
+        <input name="document_type" value="{{ document.document_type or '' }}" placeholder="Documenttype">
+        <button type="submit">Opslaan</button>
+      </form>
+    </article>
+
     {% if document.status == "processing" %}
       <div class="parser-status-card" data-document-progress data-document-id="{{ document.id }}">
         <div class="parser-status-head">
@@ -67,84 +139,52 @@
       </script>
     {% endif %}
 
-    <form action="/documents/{{ document.id }}/status" method="post" class="status-form">
-      <button name="status" value="needs_review" type="submit">Te controleren</button>
-      <button name="status" value="archived" type="submit">Archiveren</button>
-      {% if document.status != "processing" %}
-        <a class="button-link" href="/documents/{{ document.id }}/export.xlsx">Excel</a>
-        <a class="button-link" href="/documents/{{ document.id }}/controlemodel.xlsx">Controlemodel</a>
-        <a class="button-link" href="/documents/{{ document.id }}/screening.xlsx">Screening export</a>
+    <article class="panel budget-command-card">
+      <div class="budget-toolbar">
+        <div>
+          <span class="eyebrow">Begrotingsregels</span>
+          <h2>Controle en uniformering</h2>
+        </div>
+        <div class="budget-tools">
+          <input data-budget-filter placeholder="Zoek in alle velden">
+          <select aria-label="Rekenen naar">
+            <option>Rekenen naar: totaal per regel</option>
+            <option>Rekenen naar: eenheidsprijs</option>
+            <option>Rekenen naar: hoeveelheid x eenheidsprijs</option>
+          </select>
+        </div>
+      </div>
+      {% if document.budget_lines %}
+        {% if normalization_suggestions %}
+          <div class="normalization-strip">
+            <strong>Normalisatie</strong>
+            {% for line in normalization_suggestions[:8] %}
+              <span>{{ line.normalization_candidate }} <small>{{ line.normalization_score }}%</small></span>
+            {% endfor %}
+            <a class="mini-button" href="/normalisatie">Beheren</a>
+          </div>
+        {% endif %}
+        <div class="budget-actions">
+          <span>{{ document.budget_lines|length }} regels - {{ budget_line_groups|length }} groepen</span>
+          <div>
+            <button form="budget-lines-form" type="submit" name="action" value="delete_selected">Geselecteerde verwijderen</button>
+            <button form="budget-lines-form" type="submit">Regels opslaan</button>
+            <button form="budget-lines-form" type="submit" name="action" value="validate">Valideren</button>
+          </div>
+        </div>
       {% endif %}
-    </form>
-    <form action="/documents/{{ document.id }}/reparse-openai" method="post" class="status-form">
-      <button type="submit">{% if document.status == "processing" %}Parser opnieuw starten{% else %}Opnieuw parsen met OpenAI{% endif %}</button>
-    </form>
+    </article>
+  </div>
 
-    <form action="/documents/{{ document.id }}/meta" method="post" class="meta-form">
-      <label class="select-action">
-        <select name="project_id">
-          <option value="">Selecteer project</option>
-          {% for project in project_options %}
-            <option value="{{ project.id }}" {% if document.project_id == project.id %}selected{% endif %}>{{ project.project_number or "zonder nr" }} - {{ project.name }}</option>
-          {% endfor %}
-        </select>
-        <a href="/projects" class="mini-button">Nieuw project</a>
-      </label>
-      <label class="select-action">
-        <select name="relation_id">
-          <option value="">Selecteer relatie</option>
-          {% for relation in relation_options %}
-            <option value="{{ relation.id }}" {% if document.project and document.project.client_relation_id == relation.id %}selected{% endif %}>{{ relation.name }}{% if relation.relation_type %} - {{ relation.relation_type }}{% endif %}</option>
-          {% endfor %}
-        </select>
-        <a href="/relations" class="mini-button">Nieuwe relatie</a>
-      </label>
-      <input name="project_name" value="{{ document.project_name or '' }}" placeholder="Projectnaam alleen gebruiken als project nog niet is aangemaakt">
-      <input name="document_type" value="{{ document.document_type or '' }}" placeholder="Documenttype">
-      <button type="submit">Opslaan</button>
-    </form>
-  </article>
-
-  <article class="panel">
-    <div class="budget-toolbar">
-      <div>
-        <span class="eyebrow">Begrotingsregels</span>
-        <h2>Controle en uniformering</h2>
-      </div>
-      <div class="budget-tools">
-        <input data-budget-filter placeholder="Zoek in alle velden">
-        <select aria-label="Rekenen naar">
-          <option>Rekenen naar: totaal per regel</option>
-          <option>Rekenen naar: eenheidsprijs</option>
-          <option>Rekenen naar: hoeveelheid x eenheidsprijs</option>
-        </select>
-      </div>
-    </div>
+  <article class="panel budget-panel">
     {% if document.status == "processing" %}
       <div class="empty-state parser-wait-state">
         <strong>Begrotingsregels worden opgebouwd</strong>
         <span>De regels verschijnen automatisch zodra de parser klaar is.</span>
       </div>
     {% elif document.budget_lines %}
-      {% if normalization_suggestions %}
-        <div class="normalization-strip">
-          <strong>Normalisatievoorstellen</strong>
-          {% for line in normalization_suggestions[:8] %}
-            <span>{{ line.normalization_candidate }} <small>{{ line.normalization_score }}%</small></span>
-          {% endfor %}
-          <a class="mini-button" href="/normalisatie">Beheren</a>
-        </div>
-      {% endif %}
-      <form action="/documents/{{ document.id }}/budget-lines/bulk" method="post" class="budget-edit-form">
-        <div class="budget-actions">
-          <span>{{ document.budget_lines|length }} regels gevonden - {{ budget_line_groups|length }} normalisatiegroepen</span>
-          <div>
-            <button type="submit" name="action" value="delete_selected">Geselecteerde verwijderen</button>
-            <button type="submit">Regels opslaan</button>
-            <button type="submit" name="action" value="validate">Valideren</button>
-          </div>
-        </div>
-      <div class="budget-table">
+      <form id="budget-lines-form" action="/documents/{{ document.id }}/budget-lines/bulk" method="post" class="budget-edit-form">
+        <div class="budget-table">
         <div class="budget-row budget-head">
           <span>Omschrijving</span>
           <span>Hvh</span>
@@ -197,7 +237,7 @@
             </div>
           {% endfor %}
         {% endfor %}
-      </div>
+        </div>
       </form>
     {% else %}
       <p class="muted">Er zijn nog geen begrotingsregels gevonden.</p>
