@@ -1611,6 +1611,45 @@ textarea {
   grid-column: 2;
 }
 
+.kengetal-sheet-preview {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(2, 22, 43, 0.38);
+}
+
+.kengetal-sheet-preview > div {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.kengetal-sheet-preview strong {
+  color: #8bd5e6;
+  font-size: 12px;
+}
+
+.kengetal-sheet-preview span {
+  overflow: hidden;
+  color: var(--soft);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kengetal-sheet-preview iframe {
+  width: 100%;
+  height: min(58vh, 620px);
+  border: 1px solid rgba(126, 169, 219, 0.28);
+  border-radius: 6px;
+  background: #07131b;
+}
+
 .kengetal-category-editor label small {
   display: block;
   margin: 2px 0 5px;
@@ -1646,8 +1685,15 @@ textarea {
   background: rgba(2, 22, 43, 0.4);
 }
 
-.kengetal-project-form button {
+.kengetal-form-actions {
   grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.kengetal-project-form button {
+  width: 100%;
 }
 
 .normalization-workbench {

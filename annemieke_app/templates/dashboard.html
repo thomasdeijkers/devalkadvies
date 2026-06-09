@@ -238,6 +238,15 @@
                     <span>{{ row.source_filename or row.dataset_name }}{% if row.project_sheet_name %} · tabblad {{ row.project_sheet_name }}{% endif %}{% if row.source_row_label %} · rij {{ row.source_row_label }}{% endif %}</span>
                     {% if row.index_reference %}<span>{{ row.index_reference }}</span>{% endif %}
                   </div>
+                  {% if row.project_sheet_name %}
+                    <div class="kengetal-sheet-preview">
+                      <div>
+                        <strong>Bronbegroting</strong>
+                        <span>{{ row.project_sheet_name }}</span>
+                      </div>
+                      <iframe title="Bronbegroting {{ row.project_sheet_name }}" src="/kengetallen/{{ row.dataset_id }}/sheet-preview?sheet={{ row.project_sheet_name|urlencode }}"></iframe>
+                    </div>
+                  {% endif %}
                   <label>Project<input name="project_name" value="{{ row.project_name }}"></label>
                   <label>Variant<input name="variant" value="{{ row.variant }}"></label>
                   <label>Fase<input name="phase" value="{{ row.phase }}"></label>
@@ -257,7 +266,12 @@
                       </label>
                     {% endfor %}
                   </div>
-                  <button type="submit">Opslaan</button>
+                  <div class="kengetal-form-actions">
+                    <button type="submit" name="action" value="save">Opslaan</button>
+                    {% if row.project_sheet_name %}
+                      <button type="submit" name="action" value="import_sheet">Importeer tabblad</button>
+                    {% endif %}
+                  </div>
                 </form>
               </section>
             </div>

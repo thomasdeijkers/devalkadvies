@@ -807,12 +807,82 @@ def delete_reference_dataset(dataset_id: int, session: Session = Depends(get_ses
     return RedirectResponse("/kengetallen", status_code=303)
 
 
+@app.get("/kengetallen/{dataset_id}/sheet-preview", response_class=HTMLResponse)
+def reference_sheet_preview(
+    dataset_id: int,
+    sheet: str | None = None,
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    dataset = session.get(ReferenceDataset, dataset_id)
+    if dataset is None or not dataset.stored_filename:
+        raise HTTPException(status_code=404, detail="Bronbestand niet gevonden.")
+    file_path = settings.upload_dir / dataset.stored_filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Bronbestand niet gevonden.")
+
+    try:
+        from openpyxl import load_workbook
+
+        workbook = load_workbook(file_path, data_only=True, read_only=True, keep_vba=file_path.suffix.lower() == ".xlsm")
+        worksheet = next(
+            (item for item in workbook.worksheets if item.title == sheet),
+            next((item for item in workbook.worksheets if item.sheet_state == "visible"), workbook.worksheets[0]),
+        )
+        rows: list[tuple[object, ...]] = []
+        max_rows = min(worksheet.max_row or 0, 360)
+        max_cols = min(worksheet.max_column or 0, 18)
+        for row in worksheet.iter_rows(min_row=1, max_row=max_rows, max_col=max_cols, values_only=True):
+            if any(value not in {None, ""} for value in row):
+                rows.append(row)
+        safe_sheet = escape(worksheet.title)
+        workbook.close()
+    except Exception as exc:
+        return HTMLResponse(f"<p>Tabblad-preview kon niet worden geladen: {escape(str(exc)[:180])}</p>", status_code=500)
+
+    body_rows = "\n".join(
+        "<tr>" + "".join(f"<td>{escape(_preview_cell(value))}</td>" for value in row) + "</tr>"
+        for row in rows
+    )
+    if not body_rows:
+        body_rows = '<tr><td class="empty">Geen gevulde regels gevonden.</td></tr>'
+    safe_name = escape(dataset.original_filename or dataset.name)
+    return HTMLResponse(
+        f"""<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{safe_sheet}</title>
+    <style>
+      :root {{ color-scheme: dark; --bg: #07131b; --panel: #102f49; --line: #2d6385; --head: #25506a; --text: #f7fbff; --muted: #b8c9d7; }}
+      * {{ box-sizing: border-box; }}
+      body {{ margin: 0; color: var(--text); background: var(--bg); font-family: Arial, Helvetica, sans-serif; }}
+      header {{ position: sticky; top: 0; z-index: 2; padding: 10px 12px; border-bottom: 1px solid var(--line); background: rgba(7, 19, 27, 0.96); }}
+      strong, small {{ display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+      small {{ color: var(--muted); font-size: 12px; }}
+      main {{ overflow: auto; padding: 10px; }}
+      table {{ min-width: 1040px; border-collapse: collapse; background: var(--panel); }}
+      td {{ max-width: 320px; min-width: 72px; padding: 5px 7px; border: 1px solid rgba(126, 169, 219, 0.2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }}
+      tr:nth-child(odd) td {{ background: rgba(255, 255, 255, 0.025); }}
+      tr:first-child td {{ position: sticky; top: 53px; z-index: 1; background: var(--head); font-weight: 700; }}
+      td.empty {{ color: var(--muted); }}
+    </style>
+  </head>
+  <body>
+    <header><strong>{safe_sheet}</strong><small>{safe_name} · eerste {len(rows)} gevulde regels</small></header>
+    <main><table><tbody>{body_rows}</tbody></table></main>
+  </body>
+</html>"""
+    )
+
+
 @app.post("/kengetallen/index-project")
 async def update_reference_index_project(
     request: Request,
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
     form = await request.form()
+    action = str(form.get("action") or "save")
     dataset_id = _int_or_none(str(form.get("dataset_id", "")))
     source_row = _int_or_none(str(form.get("source_row", "")))
     if dataset_id is None or source_row is None:
@@ -904,8 +974,12 @@ async def update_reference_index_project(
 
     if changed_lines:
         apply_normalization(session, changed_lines)
+    notice = "kengetal_project_opgeslagen"
+    if action == "import_sheet" and project_sheet_name:
+        imported_count = _import_reference_project_sheet(session, dataset, project_sheet_name)
+        notice = "projecttabblad_geimporteerd" if imported_count else "projecttabblad_geen_regels"
     session.commit()
-    return RedirectResponse("/kengetallen?notice=kengetal_project_opgeslagen#kengetal-index", status_code=303)
+    return RedirectResponse(f"/kengetallen?notice={notice}#kengetal-index", status_code=303)
 
 
 @app.post("/normalisatie/terms")
@@ -2018,7 +2092,8 @@ def _reference_index_sections(session: Session, query: str | None, limit: int = 
                 "modal_id": f"kengetal-{line.dataset_id}-{modal_key}",
             }
         row_data = grouped[key]
-        value = line.eenheidsprijs if line.eenheidsprijs is not None else line.totaal_prijs_per_regel
+        stored_value = line.eenheidsprijs if line.eenheidsprijs is not None else line.totaal_prijs_per_regel
+        value = _reindexed_reference_value(stored_value, stored_bdb_indexering, bdb_indexering)
         row_data["categories"][category_key] = value
         row_data["category_ids"][category_key] = line.id
         row_data["category_sources"][category_key] = _reference_line_source_label(line, raw_meta, category_key)
@@ -2126,6 +2201,26 @@ def _calculated_bdb_indexering(
         ).quantize(Decimal("0.0001"))
     except (InvalidOperation, ZeroDivisionError):
         return stored_bdb_indexering
+
+
+def _reindexed_reference_value(
+    value: Decimal | int | float | str | None,
+    stored_bdb_indexering: Decimal | None,
+    current_bdb_indexering: Decimal | None,
+) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        amount_value = Decimal(str(value))
+        if stored_bdb_indexering in {None, Decimal("0")} or current_bdb_indexering is None:
+            return amount_value
+        return (
+            amount_value
+            / Decimal(str(stored_bdb_indexering))
+            * Decimal(str(current_bdb_indexering))
+        ).quantize(Decimal("0.01"))
+    except (InvalidOperation, ZeroDivisionError):
+        return Decimal(str(value))
 
 
 def _reference_index_reference(
@@ -2797,6 +2892,140 @@ def _assessment_reference_dataset(session: Session) -> ReferenceDataset:
     return dataset
 
 
+def _import_reference_project_sheet(session: Session, dataset: ReferenceDataset, sheet_name: str) -> int:
+    if not dataset.stored_filename:
+        return 0
+    file_path = settings.upload_dir / dataset.stored_filename
+    if not file_path.exists():
+        return 0
+    try:
+        from openpyxl import load_workbook
+
+        workbook = load_workbook(file_path, data_only=True, read_only=True, keep_vba=file_path.suffix.lower() == ".xlsm")
+        sheet = next((item for item in workbook.worksheets if item.title == sheet_name), None)
+        if sheet is None:
+            workbook.close()
+            return 0
+        rows = list(sheet.iter_rows(values_only=True))
+        workbook.close()
+    except Exception:
+        return 0
+
+    header = _project_sheet_header(rows)
+    if not header:
+        return 0
+    next_line_number = (
+        session.scalar(select(func.max(ReferenceLine.line_number)).where(ReferenceLine.dataset_id == dataset.id)) or 0
+    ) + 1
+    added_lines: list[ReferenceLine] = []
+    current_section = ""
+    for excel_row_number, row in enumerate(rows[header["row_index"] + 1 :], start=header["row_index"] + 2):
+        description = _text_cell(row, header["description"])
+        if not description:
+            continue
+        quantity_value = _decimal_from_cell(_row_value(row, header.get("quantity")))
+        unit = _text_cell(row, header.get("unit"))
+        unit_price = _decimal_from_cell(_row_value(row, header.get("unit_price")))
+        total = _decimal_from_cell(_row_value(row, header.get("total")))
+        if unit_price is None and total is not None and quantity_value not in {None, Decimal("0")}:
+            try:
+                unit_price = (total / quantity_value).quantize(Decimal("0.01"))
+            except (InvalidOperation, ZeroDivisionError):
+                unit_price = None
+        if total is None and unit_price is not None and quantity_value not in {None, Decimal("0")}:
+            total = (quantity_value * unit_price).quantize(Decimal("0.01"))
+        if unit_price is None and total is None:
+            current_section = description if len(description) < 120 else current_section
+            continue
+        marker = f"project_sheet:{dataset.id}:{sheet_name}:{excel_row_number}"
+        exists = session.scalar(
+            select(ReferenceLine.id)
+            .where(ReferenceLine.dataset_id == dataset.id)
+            .where(ReferenceLine.raw_text == marker)
+            .limit(1)
+        )
+        if exists:
+            continue
+        line = ReferenceLine(
+            dataset_id=dataset.id,
+            line_number=next_line_number,
+            regel_type="regel",
+            niveau=0,
+            hoofdstuk_omschrijving=current_section or None,
+            project_name=sheet_name,
+            relation_name=dataset.name,
+            project_sheet_name=sheet_name,
+            source_row=excel_row_number,
+            omschrijving_werkzaamheden=description,
+            hoeveelheid=quantity_value,
+            eenheid=unit or None,
+            totaal_prijs_per_regel=total,
+            eenheidsprijs=unit_price,
+            confidence=100 if unit_price is not None else 75,
+            raw_text=marker,
+        )
+        session.add(line)
+        added_lines.append(line)
+        next_line_number += 1
+    if added_lines:
+        apply_normalization(session, added_lines)
+    return len(added_lines)
+
+
+def _project_sheet_header(rows: list[tuple[object, ...]]) -> dict[str, int] | None:
+    for row_index, row in enumerate(rows[:120]):
+        labels = [_normalized_header_label(value) for value in row]
+        if "onderdeel" not in labels:
+            continue
+        mapping: dict[str, int] = {"row_index": row_index, "description": labels.index("onderdeel")}
+        for index, label in enumerate(labels):
+            if label in {"hheid", "heid", "hvh", "hoeveelheid"} and "quantity" not in mapping:
+                mapping["quantity"] = index
+            elif label in {"eheid", "ehd", "eenheid"} and "unit" not in mapping:
+                mapping["unit"] = index
+            elif ("eenheid" in label and "prijs" in label) or label in {"euroeenheid", "eureenheid"}:
+                mapping["unit_price"] = index
+            elif "totaal" in label:
+                mapping["total"] = index
+        if "unit_price" in mapping or "total" in mapping:
+            return mapping
+    return None
+
+
+def _normalized_header_label(value: object) -> str:
+    return re.sub(r"[^a-z0-9]+", "", _text_cell_value(value).lower().replace("€", "euro"))
+
+
+def _text_cell(row: tuple[object, ...], index: int | None) -> str:
+    return _text_cell_value(_row_value(row, index))
+
+
+def _text_cell_value(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.strftime("%d-%m-%Y")
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value).strip()
+
+
+def _row_value(row: tuple[object, ...], index: int | None) -> object:
+    if index is None or index >= len(row):
+        return None
+    return row[index]
+
+
+def _decimal_from_cell(value: object) -> Decimal | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, int | float):
+        return Decimal(str(value))
+    return _decimal_or_none(str(value))
+
+
 def _date_or_none(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -2897,6 +3126,8 @@ def _flash_message(request: Request) -> str | None:
         "kengetallen_toegevoegd": "Geselecteerde regels zijn toegevoegd aan de kengetallen-database.",
         "geen_kengetallen_geselecteerd": "Geen bruikbare geselecteerde regels met eenheidsprijs gevonden.",
         "kengetal_project_opgeslagen": "Kengetalproject opgeslagen en opnieuw genormaliseerd.",
+        "projecttabblad_geimporteerd": "Projecttabblad geïmporteerd als kengetallenregels.",
+        "projecttabblad_geen_regels": "Geen nieuwe bruikbare regels gevonden in dit projecttabblad.",
         "index_opgeslagen": "Indexregel opgeslagen.",
         "index_ongeldig": "Indexwaarde is niet geldig.",
         "index_periode_ongeldig": "Periode is niet geldig.",
