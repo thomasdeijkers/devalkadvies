@@ -167,20 +167,28 @@
         {% endfor %}
       </div>
     </div>
+    <div class="kengetal-column-controls" aria-label="Kolommen tonen">
+      <strong>Kolommen</strong>
+      <label><input id="kg-toggle-project" type="checkbox" checked> Project</label>
+      <label><input id="kg-toggle-meta" type="checkbox" checked> Projectinfo</label>
+      <label><input id="kg-toggle-index" type="checkbox" checked> Index</label>
+      <label><input id="kg-toggle-prices" type="checkbox" checked> Prijzen</label>
+      <label><input id="kg-toggle-source" type="checkbox" checked> Bron en actie</label>
+    </div>
     <div class="kengetal-index-scroll">
       <div class="kengetal-index-row kengetal-index-head">
-        <span>Project</span>
-        <span>Variant</span>
-        <span>Fase</span>
-        <span>Peildatum</span>
-        <span>Periode</span>
-        <span>BDB-index</span>
+        <span class="col-project">Project</span>
+        <span class="col-meta">Variant</span>
+        <span class="col-meta">Fase</span>
+        <span class="col-meta">Peildatum</span>
+        <span class="col-meta">Periode</span>
+        <span class="col-index-meta">BDB-index</span>
         {% for category_key, category_label in reference_category_columns %}
-          <span>{{ category_label }}</span>
+          <span class="col-price">{{ category_label }}</span>
         {% endfor %}
-        <span>Index</span>
-        <span>Bron</span>
-        <span>Actie</span>
+        <span class="col-index-source">Index</span>
+        <span class="col-source">Bron</span>
+        <span class="col-action">Actie</span>
       </div>
       {% for section in reference_index_sections %}
         <details class="kengetal-section">
@@ -190,19 +198,19 @@
           </summary>
           {% for row in section.rows %}
             <div class="kengetal-index-row">
-              <span class="kengetal-project-cell">
+              <span class="kengetal-project-cell col-project">
                 <strong>{{ row.project_name or "-" }}</strong>
                 <small>{{ row.project_sheet_name or row.source_filename or "" }}</small>
               </span>
-              <span>{{ row.variant or "-" }}</span>
-              <span>{{ row.phase or "-" }}</span>
-              <span>{{ row.date_label or "-" }}</span>
-              <span>{{ row.period or "-" }}</span>
-              <span>{{ row.bdb_indexering|amount if row.bdb_indexering else "-" }}</span>
+              <span class="col-meta">{{ row.variant or "-" }}</span>
+              <span class="col-meta">{{ row.phase or "-" }}</span>
+              <span class="col-meta">{{ row.date_label or "-" }}</span>
+              <span class="col-meta">{{ row.period or "-" }}</span>
+              <span class="col-index-meta">{{ row.bdb_indexering|amount if row.bdb_indexering else "-" }}</span>
               {% for category_key, category_label in reference_category_columns %}
                 {% set value = row.categories.get(category_key) %}
                 {% set value_source = row.category_sources.get(category_key) %}
-                <span class="numeric-cell">
+                <span class="numeric-cell col-price">
                   {% if value is not none %}
                     <a class="kengetal-value-link" href="#{{ row.modal_id }}" title="{{ value_source or category_label }}">{{ value|euro }}</a>
                   {% else %}
@@ -210,17 +218,17 @@
                   {% endif %}
                 </span>
               {% endfor %}
-              <span class="button-cell">
+              <span class="button-cell col-index-source">
                 {% if row.index_reference %}
                   <button class="mini-button compact-source-button" type="button" title="{{ row.index_reference }}">Index</button>
                 {% else %}
                   <button class="mini-button compact-source-button muted-button" type="button" disabled>Index</button>
                 {% endif %}
               </span>
-              <span class="button-cell">
+              <span class="button-cell col-source">
                 <a class="mini-button compact-source-button" href="#{{ row.modal_id }}" title="{{ row.source_filename or row.dataset_name }}{% if row.project_sheet_name %} · {{ row.project_sheet_name }}{% endif %}{% if row.source_row_label %} · rij {{ row.source_row_label }}{% endif %}">Bron</a>
               </span>
-              <span class="button-cell"><a class="mini-button compact-source-button" href="#{{ row.modal_id }}">Open</a></span>
+              <span class="button-cell col-action"><a class="mini-button compact-source-button" href="#{{ row.modal_id }}">Open</a></span>
             </div>
             <div id="{{ row.modal_id }}" class="modal-card">
               <a class="modal-backdrop" href="#kengetal-index" aria-label="Sluiten"></a>
