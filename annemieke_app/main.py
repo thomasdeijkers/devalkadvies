@@ -1240,6 +1240,46 @@ def create_index_series(
     return RedirectResponse("/indices", status_code=303)
 
 
+@app.post("/indices/value")
+def create_index_value(
+    period: str = Form(...),
+    index_value: str = Form(...),
+    note: str = Form(""),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    series = session.scalars(select(PriceIndexSeries).order_by(PriceIndexSeries.created_at).limit(1)).first()
+    if series is None:
+        series = PriceIndexSeries(
+            name="BDB index",
+            source="Handmatig",
+            provider="manual",
+            description="Handmatig beheerde indexwaarden voor begrotingsbeoordeling.",
+        )
+        session.add(series)
+        session.flush()
+    parsed_value = _decimal_or_none(index_value)
+    if parsed_value is None:
+        return RedirectResponse("/indices?notice=index_ongeldig", status_code=303)
+    effective_date = _period_to_date(period)
+    if effective_date is None:
+        return RedirectResponse("/indices?notice=index_periode_ongeldig", status_code=303)
+    label = period.strip()
+    existing = session.scalar(
+        select(PriceIndexValue)
+        .where(PriceIndexValue.series_id == series.id)
+        .where(PriceIndexValue.notes == label)
+        .limit(1)
+    )
+    if existing is None:
+        existing = PriceIndexValue(series_id=series.id, effective_date=effective_date, notes=label)
+        session.add(existing)
+    existing.index_value = parsed_value
+    existing.effective_date = effective_date
+    existing.source_reference = note.strip() or None
+    session.commit()
+    return RedirectResponse("/indices?notice=index_opgeslagen", status_code=303)
+
+
 @app.post("/indices/{series_id}/sync")
 def sync_index_series(series_id: int, session: Session = Depends(get_session)) -> RedirectResponse:
     series = session.get(PriceIndexSeries, series_id)
@@ -2723,6 +2763,24 @@ def _date_or_none(value: str | None) -> datetime | None:
         return None
 
 
+def _period_to_date(value: str | None) -> datetime | None:
+    raw_value = (value or "").strip()
+    if not raw_value:
+        return None
+    quarter_match = re.fullmatch(r"(\d{4})[-\s]?Q([1-4])", raw_value, flags=re.IGNORECASE)
+    if quarter_match:
+        year = int(quarter_match.group(1))
+        month = (int(quarter_match.group(2)) - 1) * 3 + 1
+        return datetime(year, month, 1)
+    month_match = re.fullmatch(r"(\d{4})[-/](\d{1,2})", raw_value)
+    if month_match:
+        year = int(month_match.group(1))
+        month = int(month_match.group(2))
+        if 1 <= month <= 12:
+            return datetime(year, month, 1)
+    return _date_or_none(raw_value)
+
+
 def _form_value(form, key: str, index: int) -> str:
     values = form.getlist(key)
     if index >= len(values):
@@ -2796,6 +2854,9 @@ def _flash_message(request: Request) -> str | None:
         "kengetallen_toegevoegd": "Geselecteerde regels zijn toegevoegd aan de kengetallen-database.",
         "geen_kengetallen_geselecteerd": "Geen bruikbare geselecteerde regels met eenheidsprijs gevonden.",
         "kengetal_project_opgeslagen": "Kengetalproject opgeslagen en opnieuw genormaliseerd.",
+        "index_opgeslagen": "Indexregel opgeslagen.",
+        "index_ongeldig": "Indexwaarde is niet geldig.",
+        "index_periode_ongeldig": "Periode is niet geldig.",
     }
     return messages.get(request.query_params.get("notice", ""))
 

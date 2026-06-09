@@ -173,7 +173,7 @@
       <label><input id="kg-toggle-meta" type="checkbox" checked> Projectinfo</label>
       <label><input id="kg-toggle-index" type="checkbox" checked> Index</label>
       <label><input id="kg-toggle-prices" type="checkbox" checked> Prijzen</label>
-      <label><input id="kg-toggle-source" type="checkbox" checked> Bron en actie</label>
+      <label><input id="kg-toggle-source" type="checkbox" checked> Actie</label>
     </div>
     <div class="kengetal-index-scroll">
       <div class="kengetal-index-row kengetal-index-head">
@@ -186,8 +186,6 @@
         {% for category_key, category_label in reference_category_columns %}
           <span class="col-price">{{ category_label }}</span>
         {% endfor %}
-        <span class="col-index-source">Index</span>
-        <span class="col-source">Bron</span>
         <span class="col-action">Actie</span>
       </div>
       {% for section in reference_index_sections %}
@@ -218,17 +216,9 @@
                   {% endif %}
                 </span>
               {% endfor %}
-              <span class="button-cell col-index-source">
-                {% if row.index_reference %}
-                  <button class="mini-button compact-source-button" type="button" title="{{ row.index_reference }}">Index</button>
-                {% else %}
-                  <button class="mini-button compact-source-button muted-button" type="button" disabled>Index</button>
-                {% endif %}
+              <span class="button-cell col-action">
+                <a class="mini-button compact-source-button" href="#{{ row.modal_id }}" title="{{ row.source_filename or row.dataset_name }}{% if row.project_sheet_name %} · {{ row.project_sheet_name }}{% endif %}{% if row.source_row_label %} · rij {{ row.source_row_label }}{% endif %}{% if row.index_reference %} · {{ row.index_reference }}{% endif %}">Open</a>
               </span>
-              <span class="button-cell col-source">
-                <a class="mini-button compact-source-button" href="#{{ row.modal_id }}" title="{{ row.source_filename or row.dataset_name }}{% if row.project_sheet_name %} · {{ row.project_sheet_name }}{% endif %}{% if row.source_row_label %} · rij {{ row.source_row_label }}{% endif %}">Bron</a>
-              </span>
-              <span class="button-cell col-action"><a class="mini-button compact-source-button" href="#{{ row.modal_id }}">Open</a></span>
             </div>
             <div id="{{ row.modal_id }}" class="modal-card">
               <a class="modal-backdrop" href="#kengetal-index" aria-label="Sluiten"></a>
@@ -789,84 +779,44 @@
   {% endif %}
 
   {% if active_page == "indices" %}
-  <section class="index-sheet-layout">
-    <article class="panel index-formula-panel">
-      <span class="chip automatic">Indexblad</span>
-      <h3>INDEXEN</h3>
-      <p>De BDB-factor volgt dezelfde logica als het Excelbestand:</p>
-      <code class="formula-card">X.ZOEKEN(huidige periode; INDEXEN!A:A; INDEXEN!B:B) / X.ZOEKEN(peilperiode; INDEXEN!A:A; INDEXEN!B:B)</code>
-      <div class="index-kpi-list">
-        <article>
-          <span>Huidige periode</span>
-          <strong>{% if latest_index_value %}{{ latest_index_value.notes or latest_index_value.effective_date.strftime("%Y-%m") }}{% else %}-{% endif %}</strong>
-        </article>
-        <article>
-          <span>Huidige index</span>
-          <strong>{% if latest_index_value %}{{ latest_index_value.index_value|amount }}{% else %}-{% endif %}</strong>
-        </article>
-      </div>
-      <details class="index-admin-details">
-        <summary>Indexbeheer</summary>
-        <div class="entity-list">
-          {% for series in index_series %}
-            <article>
-              <strong>{{ series.name }}</strong>
-              <span>{{ series.source or series.provider }}{% if series.last_synced_at %} · bijgewerkt {{ series.last_synced_at.strftime("%d-%m-%Y") }}{% endif %}</span>
-              <form action="/indices/{{ series.id }}/sync" method="post">
-                <button class="mini-button" type="submit">Sync</button>
-              </form>
-            </article>
-          {% else %}
-            <p class="muted">Nog geen indexreeks geladen.</p>
-          {% endfor %}
-        </div>
-      </details>
-      <details class="index-admin-details">
-        <summary>Nieuwe indexreeks</summary>
-        <form action="/indices" method="post" class="stack-form">
-          <input name="name" placeholder="Naam indexreeks" required>
-          <input name="source" placeholder="Bron, bijvoorbeeld CBS StatLine">
-          <select name="provider">
-            <option value="cbs">CBS / OData</option>
-            <option value="manual">Handmatig</option>
-            <option value="custom">Eigen API</option>
-          </select>
-          <input name="api_url" placeholder="API URL met maandwaarden">
-          <input name="period_field" placeholder="Veld voor maand/periode">
-          <input name="value_field" placeholder="Veld voor indexwaarde">
-          <textarea name="description" placeholder="Omschrijving"></textarea>
-          <button type="submit">Indexreeks opslaan</button>
-        </form>
-      </details>
+  <section class="index-simple-layout">
+    <article class="panel index-add-panel">
+      <span class="chip automatic">Index</span>
+      <h3>Index toevoegen</h3>
+      <form action="/indices/value" method="post" class="index-value-form">
+        <input name="period" placeholder="Periode, bv. 2026-Q2" required>
+        <input name="index_value" placeholder="Index, bv. 197,6" required>
+        <input name="note" placeholder="Opmerking of bron op regelniveau">
+        <button type="submit">Toevoegen</button>
+      </form>
     </article>
     <article class="panel index-sheet-panel">
       <div class="index-sheet-title">
         <div>
-          <span class="eyebrow">Bron</span>
-          <h3>Nieuwbouwwoningen; outputprijsindex bouwkosten 2000 = 100</h3>
-          <p>CBS Prijsindex bouwkosten excl. BTW | Index</p>
+          <span class="eyebrow">Indexregels</span>
+          <h3>Beschikbare indexen</h3>
         </div>
       </div>
       <div class="compact-index-values">
         <div class="compact-index-values-head">
           <span>Periode</span>
           <span>Index</span>
-          <span>Bron</span>
+          <span>Opmerking</span>
         </div>
         {% for value in index_values %}
           <div class="compact-index-values-row">
             <span>{{ value.notes or value.effective_date.strftime("%Y-%m") }}</span>
             <span>{{ value.index_value|amount }}</span>
-            <span class="button-cell">
+            <span>
               {% if value.source_reference %}
-                <button class="mini-button compact-source-button" type="button" title="{{ value.source_reference }}">Bron</button>
+                {{ value.source_reference }}
               {% else %}
-                <button class="mini-button compact-source-button muted-button" type="button" disabled>Bron</button>
+                -
               {% endif %}
             </span>
           </div>
         {% else %}
-          <p class="muted">Nog geen indexwaarden geladen uit het INDEXEN-blad.</p>
+          <p class="muted">Nog geen indexwaarden toegevoegd.</p>
         {% endfor %}
       </div>
     </article>
