@@ -1185,6 +1185,8 @@ textarea {
 }
 
 .compact-source-button {
+  display: inline-flex;
+  align-items: center;
   width: 64px;
   min-height: 24px;
   padding: 0 8px;
@@ -1204,19 +1206,131 @@ textarea {
   font-size: 10px;
 }
 
+.kengetal-value-link {
+  display: block;
+  width: 100%;
+  min-height: 24px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: #fff;
+  text-align: right;
+}
+
+.kengetal-value-link:hover {
+  border-color: rgba(77, 177, 201, 0.62);
+  background: rgba(77, 177, 201, 0.14);
+}
+
+.index-sheet-layout {
+  display: grid;
+  grid-template-columns: 420px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.index-formula-panel,
+.index-sheet-panel {
+  align-self: start;
+}
+
+.formula-card {
+  display: block;
+  margin: 12px 0;
+  padding: 12px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: #dfffee;
+  background: rgba(2, 22, 43, 0.58);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.index-kpi-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.index-kpi-list article {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(2, 22, 43, 0.45);
+}
+
+.index-kpi-list span,
+.index-kpi-list strong {
+  display: block;
+}
+
+.index-kpi-list span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.index-kpi-list strong {
+  margin-top: 4px;
+  font-size: 18px;
+}
+
+.index-admin-details {
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(2, 22, 43, 0.28);
+}
+
+.index-admin-details summary {
+  padding: 10px 12px;
+  color: #8bd5e6;
+  cursor: pointer;
+  font-weight: 900;
+  list-style: none;
+}
+
+.index-admin-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.index-admin-details[open] {
+  padding-bottom: 10px;
+}
+
+.index-admin-details .stack-form,
+.index-admin-details .entity-list {
+  margin: 0 10px;
+}
+
+.index-sheet-title {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.index-sheet-title h3 {
+  margin-bottom: 3px;
+}
+
 .compact-index-values {
   display: grid;
   gap: 0;
-  margin-top: 14px;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 7px;
+  width: min(520px, 100%);
 }
 
 .compact-index-values-head,
 .compact-index-values-row {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) 90px 82px;
+  grid-template-columns: minmax(120px, 1fr) 110px 82px;
   align-items: center;
   min-height: 34px;
   padding: 0 10px;
@@ -1227,11 +1341,18 @@ textarea {
 .compact-index-values-head {
   min-height: 36px;
   border-top: 0;
-  background: rgba(255, 255, 255, 0.06);
+  background: #25465f;
   color: #d9e8fa;
   font-size: 10px;
   font-weight: 900;
   text-transform: uppercase;
+}
+
+.compact-index-values-row span:nth-child(2),
+.compact-index-values-head span:nth-child(2) {
+  margin-inline: -4px;
+  padding: 8px 10px;
+  background: rgba(180, 233, 202, 0.16);
 }
 
 .compact-index-values-row span:nth-child(2) {
@@ -1306,6 +1427,16 @@ textarea {
 .kengetal-source-note span {
   color: var(--soft);
   font-size: 12px;
+}
+
+.kengetal-category-editor label small {
+  display: block;
+  margin: 2px 0 5px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .kengetal-project-form label {
@@ -2570,6 +2701,7 @@ pre {
   .kengetal-commandbar,
   .kengetal-upload-row,
   .kengetal-summary-strip,
+  .index-sheet-layout,
   .data-grid,
   .input-overview,
   .consult-form,

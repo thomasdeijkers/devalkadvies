@@ -290,6 +290,7 @@ def _render_workspace(
         if active_page == "indices"
         else []
     )
+    latest_index_value = index_values[0] if index_values else None
     scheduled_jobs = session.scalars(select(ScheduledJob).order_by(ScheduledJob.created_at.desc())).all()
     reference_datasets = session.scalars(
         select(ReferenceDataset).order_by(ReferenceDataset.created_at.desc()).limit(20)
@@ -333,6 +334,7 @@ def _render_workspace(
             "relation_options": relation_options,
             "index_series": index_series,
             "index_values": index_values,
+            "latest_index_value": latest_index_value,
             "scheduled_jobs": scheduled_jobs,
             "reference_datasets": reference_datasets,
             "reference_lines": reference_lines,
@@ -1943,6 +1945,7 @@ def _reference_index_sections(session: Session, query: str | None, limit: int = 
                 "date_label": line.document_date.strftime("%d-%m-%Y") if line.document_date else "",
                 "categories": {},
                 "category_ids": {},
+                "category_sources": {},
                 "source_rows": [],
                 "category_count": 0,
                 "total": Decimal("0"),
@@ -1952,6 +1955,7 @@ def _reference_index_sections(session: Session, query: str | None, limit: int = 
         value = line.eenheidsprijs if line.eenheidsprijs is not None else line.totaal_prijs_per_regel
         row_data["categories"][category_key] = value
         row_data["category_ids"][category_key] = line.id
+        row_data["category_sources"][category_key] = _reference_line_source_label(line, raw_meta, category_key)
         row_data["category_count"] = int(row_data["category_count"]) + 1
         if source_row and source_row not in row_data["source_rows"]:
             row_data["source_rows"].append(source_row)
@@ -2023,6 +2027,8 @@ def _reference_index_summary(session: Session, sections: list[dict[str, object]]
 def _price_index_lookup(session: Session) -> dict[str, PriceIndexValue]:
     values = session.scalars(select(PriceIndexValue).order_by(PriceIndexValue.effective_date.desc())).all()
     lookup: dict[str, PriceIndexValue] = {}
+    if values:
+        lookup["__latest__"] = values[0]
     for value in values:
         keys = {
             value.notes or "",
@@ -2047,13 +2053,34 @@ def _reference_index_reference(
     if not period and bdb_indexering is None:
         return ""
     index_value = index_lookup.get(_period_key(period))
+    latest_index = index_lookup.get("__latest__")
     parts: list[str] = []
     if index_value is not None:
-        parts.append(f"{index_value.notes or period}: {amount(index_value.index_value)}")
+        if latest_index is not None and latest_index.id != index_value.id and index_value.index_value:
+            factor = Decimal(str(latest_index.index_value)) / Decimal(str(index_value.index_value))
+            parts.append(
+                f"{latest_index.notes or latest_index.effective_date.strftime('%Y-%m')}: "
+                f"{amount(latest_index.index_value)} / {index_value.notes or period}: "
+                f"{amount(index_value.index_value)} = {amount(factor)}"
+            )
+        else:
+            parts.append(f"{index_value.notes or period}: {amount(index_value.index_value)}")
         if index_value.source_reference:
             parts.append(index_value.source_reference)
     if bdb_indexering is not None:
         parts.append(f"BDB factor {amount(bdb_indexering)}")
+    return " | ".join(parts)
+
+
+def _reference_line_source_label(line: ReferenceLine, raw_meta: dict[str, str], category_key: str) -> str:
+    parts = [line.dataset.original_filename or line.dataset.name]
+    if line.project_sheet_name:
+        parts.append(f"tabblad {line.project_sheet_name}")
+    source_row = line.source_row or _int_or_none(raw_meta.get("rij")) or line.line_number
+    if source_row:
+        parts.append(f"rij {source_row}")
+    if category_key:
+        parts.append(f"kolom {category_key}")
     return " | ".join(parts)
 
 

@@ -201,7 +201,14 @@
               <span>{{ row.bdb_indexering|amount if row.bdb_indexering else "-" }}</span>
               {% for category_key, category_label in reference_category_columns %}
                 {% set value = row.categories.get(category_key) %}
-                <span class="numeric-cell">{{ value|euro if value is not none else "-" }}</span>
+                {% set value_source = row.category_sources.get(category_key) %}
+                <span class="numeric-cell">
+                  {% if value is not none %}
+                    <a class="kengetal-value-link" href="#{{ row.modal_id }}" title="{{ value_source or category_label }}">{{ value|euro }}</a>
+                  {% else %}
+                    -
+                  {% endif %}
+                </span>
               {% endfor %}
               <span class="button-cell">
                 {% if row.index_reference %}
@@ -243,8 +250,13 @@
                   <div class="kengetal-category-editor">
                     {% for category_key, category_label in reference_category_columns %}
                       {% set value = row.categories.get(category_key) %}
+                      {% set value_source = row.category_sources.get(category_key) %}
                       {% set safe_key = category_key|replace(" ", "_") %}
-                      <label>{{ category_label }}<input name="cat_{{ safe_key }}" value="{{ value|amount if value is not none else '' }}"></label>
+                      <label>
+                        <span>{{ category_label }}</span>
+                        {% if value_source %}<small>{{ value_source }}</small>{% endif %}
+                        <input name="cat_{{ safe_key }}" value="{{ value|amount if value is not none else '' }}">
+                      </label>
                     {% endfor %}
                   </div>
                   <button type="submit">Opslaan</button>
@@ -769,40 +781,63 @@
   {% endif %}
 
   {% if active_page == "indices" %}
-  <section class="data-grid">
-    <article class="panel data-form-panel">
-      <span class="chip automatic">Indexbron</span>
-      <h3>Nieuwe indexreeks</h3>
-      <form action="/indices" method="post" class="stack-form">
-        <input name="name" placeholder="Naam indexreeks" required>
-        <input name="source" placeholder="Bron, bijvoorbeeld CBS StatLine">
-        <select name="provider">
-          <option value="cbs">CBS / OData</option>
-          <option value="manual">Handmatig</option>
-          <option value="custom">Eigen API</option>
-        </select>
-        <input name="api_url" placeholder="API URL met maandwaarden">
-        <input name="period_field" placeholder="Veld voor maand/periode">
-        <input name="value_field" placeholder="Veld voor indexwaarde">
-        <textarea name="description" placeholder="Omschrijving"></textarea>
-        <button type="submit">Indexreeks opslaan</button>
-      </form>
+  <section class="index-sheet-layout">
+    <article class="panel index-formula-panel">
+      <span class="chip automatic">Indexblad</span>
+      <h3>INDEXEN</h3>
+      <p>De BDB-factor volgt dezelfde logica als het Excelbestand:</p>
+      <code class="formula-card">X.ZOEKEN(huidige periode; INDEXEN!A:A; INDEXEN!B:B) / X.ZOEKEN(peilperiode; INDEXEN!A:A; INDEXEN!B:B)</code>
+      <div class="index-kpi-list">
+        <article>
+          <span>Huidige periode</span>
+          <strong>{% if latest_index_value %}{{ latest_index_value.notes or latest_index_value.effective_date.strftime("%Y-%m") }}{% else %}-{% endif %}</strong>
+        </article>
+        <article>
+          <span>Huidige index</span>
+          <strong>{% if latest_index_value %}{{ latest_index_value.index_value|amount }}{% else %}-{% endif %}</strong>
+        </article>
+      </div>
+      <details class="index-admin-details">
+        <summary>Indexbeheer</summary>
+        <div class="entity-list">
+          {% for series in index_series %}
+            <article>
+              <strong>{{ series.name }}</strong>
+              <span>{{ series.source or series.provider }}{% if series.last_synced_at %} · bijgewerkt {{ series.last_synced_at.strftime("%d-%m-%Y") }}{% endif %}</span>
+              <form action="/indices/{{ series.id }}/sync" method="post">
+                <button class="mini-button" type="submit">Sync</button>
+              </form>
+            </article>
+          {% else %}
+            <p class="muted">Nog geen indexreeks geladen.</p>
+          {% endfor %}
+        </div>
+      </details>
+      <details class="index-admin-details">
+        <summary>Nieuwe indexreeks</summary>
+        <form action="/indices" method="post" class="stack-form">
+          <input name="name" placeholder="Naam indexreeks" required>
+          <input name="source" placeholder="Bron, bijvoorbeeld CBS StatLine">
+          <select name="provider">
+            <option value="cbs">CBS / OData</option>
+            <option value="manual">Handmatig</option>
+            <option value="custom">Eigen API</option>
+          </select>
+          <input name="api_url" placeholder="API URL met maandwaarden">
+          <input name="period_field" placeholder="Veld voor maand/periode">
+          <input name="value_field" placeholder="Veld voor indexwaarde">
+          <textarea name="description" placeholder="Omschrijving"></textarea>
+          <button type="submit">Indexreeks opslaan</button>
+        </form>
+      </details>
     </article>
-    <article class="panel">
-      <span class="chip automatic">Maandindex</span>
-      <h3>Beschikbare indexreeksen</h3>
-      <div class="entity-list">
-        {% for series in index_series %}
-          <article>
-            <strong>{{ series.name }}</strong>
-            <span>{{ series.source or series.provider }}{% if series.last_synced_at %} · laatst bijgewerkt {{ series.last_synced_at.strftime("%d-%m-%Y") }}{% endif %}</span>
-            <form action="/indices/{{ series.id }}/sync" method="post">
-              <button class="mini-button" type="submit">Synchroniseren</button>
-            </form>
-          </article>
-        {% else %}
-          <p class="muted">Nog geen indexreeksen toegevoegd.</p>
-        {% endfor %}
+    <article class="panel index-sheet-panel">
+      <div class="index-sheet-title">
+        <div>
+          <span class="eyebrow">Bron</span>
+          <h3>Nieuwbouwwoningen; outputprijsindex bouwkosten 2000 = 100</h3>
+          <p>CBS Prijsindex bouwkosten excl. BTW | Index</p>
+        </div>
       </div>
       <div class="compact-index-values">
         <div class="compact-index-values-head">
