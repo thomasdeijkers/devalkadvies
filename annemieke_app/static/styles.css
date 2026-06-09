@@ -1192,7 +1192,7 @@ textarea {
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #163b55;
+  background: #183d5a;
   scrollbar-gutter: stable;
 }
 
@@ -1241,11 +1241,11 @@ textarea {
   align-self: stretch;
   display: flex;
   align-items: center;
-  background: rgba(180, 233, 202, 0.18);
+  background: transparent;
 }
 
 .kengetal-index-head .col-index-meta {
-  background: rgba(180, 233, 202, 0.18);
+  background: transparent;
 }
 
 .kengetal-index-head span {
@@ -1462,7 +1462,7 @@ textarea {
 .compact-index-values-head,
 .compact-index-values-row {
   display: grid;
-  grid-template-columns: 180px 140px minmax(420px, 1fr);
+  grid-template-columns: 180px 140px minmax(420px, 1fr) 110px;
   align-items: center;
   min-height: 42px;
   padding: 0 12px;
@@ -1480,24 +1480,35 @@ textarea {
   text-transform: none;
 }
 
-.compact-index-values-row span:nth-child(2),
+.compact-index-values-row input:nth-child(2),
 .compact-index-values-head span:nth-child(2) {
   margin-inline: -4px;
   padding: 8px 10px;
   background: rgba(180, 233, 202, 0.16);
 }
 
-.compact-index-values-row span:nth-child(2) {
+.compact-index-values-row input:nth-child(2) {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
-.compact-index-values-row span:nth-child(3) {
-  overflow: visible;
-  color: var(--muted);
-  line-height: 1.35;
-  white-space: normal;
-  word-break: break-word;
+.compact-index-values-row input {
+  width: 100%;
+  min-height: 30px;
+  padding: 6px 8px;
+  border-color: transparent;
+  background: rgba(2, 22, 43, 0.22);
+  color: #fff;
+}
+
+.compact-index-values-row input:focus {
+  border-color: rgba(77, 177, 201, 0.78);
+  background: rgba(2, 22, 43, 0.58);
+}
+
+.compact-index-values-row button {
+  min-height: 30px;
+  justify-self: end;
 }
 
 .kengetal-section {

@@ -802,19 +802,15 @@
           <span>Periode</span>
           <span>Index</span>
           <span>Opmerking</span>
+          <span>Actie</span>
         </div>
         {% for value in index_values %}
-          <div class="compact-index-values-row">
-            <span>{{ value.notes or value.effective_date.strftime("%Y-%m") }}</span>
-            <span>{{ value.index_value|amount }}</span>
-            <span>
-              {% if value.source_reference %}
-                {{ value.source_reference }}
-              {% else %}
-                -
-              {% endif %}
-            </span>
-          </div>
+          <form class="compact-index-values-row" action="/indices/value/{{ value.id }}" method="post">
+            <input name="period" value="{{ value.notes or value.effective_date.strftime('%Y-%m') }}">
+            <input name="index_value" value="{{ value.index_value|amount }}">
+            <input name="note" value="{{ value.source_reference or '' }}" placeholder="Opmerking">
+            <button class="mini-button" type="submit">Opslaan</button>
+          </form>
         {% else %}
           <p class="muted">Nog geen indexwaarden toegevoegd.</p>
         {% endfor %}

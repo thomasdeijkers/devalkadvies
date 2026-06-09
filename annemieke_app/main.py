@@ -1280,6 +1280,31 @@ def create_index_value(
     return RedirectResponse("/indices?notice=index_opgeslagen", status_code=303)
 
 
+@app.post("/indices/value/{value_id}")
+def update_index_value(
+    value_id: int,
+    period: str = Form(...),
+    index_value: str = Form(...),
+    note: str = Form(""),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    value = session.get(PriceIndexValue, value_id)
+    if value is None:
+        raise HTTPException(status_code=404, detail="Indexregel niet gevonden.")
+    parsed_value = _decimal_or_none(index_value)
+    if parsed_value is None:
+        return RedirectResponse("/indices?notice=index_ongeldig", status_code=303)
+    effective_date = _period_to_date(period)
+    if effective_date is None:
+        return RedirectResponse("/indices?notice=index_periode_ongeldig", status_code=303)
+    value.notes = period.strip()
+    value.index_value = parsed_value
+    value.effective_date = effective_date
+    value.source_reference = note.strip() or None
+    session.commit()
+    return RedirectResponse("/indices?notice=index_opgeslagen", status_code=303)
+
+
 @app.post("/indices/{series_id}/sync")
 def sync_index_series(series_id: int, session: Session = Depends(get_session)) -> RedirectResponse:
     series = session.get(PriceIndexSeries, series_id)
