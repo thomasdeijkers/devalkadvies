@@ -20,7 +20,7 @@ if str(ROOT) not in sys.path:
 from annemieke_app.config import settings  # noqa: E402
 from annemieke_app.database import SessionLocal, create_db  # noqa: E402
 from annemieke_app.kengetallen import import_reference_lines  # noqa: E402
-from annemieke_app.models import ReferenceDataset, ReferenceLine  # noqa: E402
+from annemieke_app.models import PriceIndexSeries, PriceIndexValue, ReferenceDataset, ReferenceLine  # noqa: E402
 from annemieke_app.normalizer import apply_normalization, is_noise_line  # noqa: E402
 
 
@@ -91,6 +91,12 @@ def import_file(session, path: Path) -> int:
         session.add(line)
     if lines:
         apply_normalization(session, lines)
+    index_count = _import_price_index_values(session, path)
+    if index_count:
+        dataset.notes = (
+            "Eenmalig ingeladen bronbestand voor historische kengetallen en normalisatie. "
+            f"Indexblad verwerkt: {index_count} periodes."
+        )
     session.commit()
     return len(lines)
 
@@ -130,6 +136,7 @@ def _kengetallen_index_lines(path: Path, dataset: ReferenceDataset) -> list[Refe
     if sheet is None:
         return []
     blocks = _find_header_blocks(sheet)
+    sheet_cache: dict[tuple[str, str], str | None] = {}
     lines: list[ReferenceLine] = []
     for block_index, block in enumerate(blocks):
         next_row = blocks[block_index + 1]["row"] if block_index + 1 < len(blocks) else sheet.max_row + 1
@@ -144,6 +151,10 @@ def _kengetallen_index_lines(path: Path, dataset: ReferenceDataset) -> list[Refe
             period = _text(_cell(sheet, row, block["columns"].get("periode")))
             price_date = _date(_cell(sheet, row, block["columns"].get("peildatum")))
             index_factor = _decimal(_cell(sheet, row, block["columns"].get("bdb indexering")))
+            lookup_key = (project_name, variant or "")
+            if lookup_key not in sheet_cache:
+                sheet_cache[lookup_key] = _match_project_sheet(workbook.worksheets, project_name, variant)
+            project_sheet_name = sheet_cache[lookup_key]
             for category_key, category_label in CATEGORY_HEADERS.items():
                 column = block["columns"].get(category_key)
                 value = _decimal(_cell(sheet, row, column))
@@ -162,6 +173,11 @@ def _kengetallen_index_lines(path: Path, dataset: ReferenceDataset) -> list[Refe
                         project_name=project_name,
                         relation_name=variant,
                         document_date=price_date,
+                        phase=phase,
+                        period=period,
+                        bdb_indexering=index_factor,
+                        project_sheet_name=project_sheet_name,
+                        source_row=row,
                         omschrijving_werkzaamheden=description,
                         hoeveelheid=Decimal("1"),
                         eenheid="m2 bvo",
@@ -176,6 +192,63 @@ def _kengetallen_index_lines(path: Path, dataset: ReferenceDataset) -> list[Refe
                     )
                 )
     return lines
+
+
+def _import_price_index_values(session, path: Path) -> int:
+    workbook = load_workbook(path, data_only=True, keep_vba=path.suffix.lower() == ".xlsm")
+    sheet = next((ws for ws in workbook.worksheets if _key(ws.title) == "indexen"), None)
+    if sheet is None:
+        return 0
+
+    period_column = None
+    index_column = None
+    header_row = None
+    for row in range(1, min(sheet.max_row, 30) + 1):
+        for column in range(1, min(sheet.max_column, 12) + 1):
+            label = _key(sheet.cell(row=row, column=column).value)
+            if label == "periode":
+                period_column = column
+            elif label == "index":
+                index_column = column
+        if period_column and index_column:
+            header_row = row
+            break
+    if not header_row:
+        return 0
+
+    series = session.scalar(
+        select(PriceIndexSeries).where(PriceIndexSeries.name == "Nieuwbouwwoningen outputprijsindex bouwkosten")
+    )
+    if series is None:
+        series = PriceIndexSeries(name="Nieuwbouwwoningen outputprijsindex bouwkosten")
+        session.add(series)
+        session.flush()
+    series.description = "CBS Prijsindex bouwkosten excl. BTW, ingeladen uit het DeValk kengetallenbestand."
+    series.source = path.name
+    series.provider = "excel"
+    series.period_field = "Periode"
+    series.value_field = "Index"
+    series.last_synced_at = datetime.now()
+    series.values.clear()
+    session.flush()
+
+    count = 0
+    for row in range(header_row + 1, sheet.max_row + 1):
+        period = _text(sheet.cell(row=row, column=period_column).value)
+        index_value = _decimal(sheet.cell(row=row, column=index_column).value)
+        effective_date = _period_start(period)
+        if not period or index_value is None or effective_date is None:
+            continue
+        session.add(
+            PriceIndexValue(
+                series_id=series.id,
+                effective_date=effective_date,
+                index_value=index_value,
+                notes=period,
+            )
+        )
+        count += 1
+    return count
 
 
 def _generic_reference_lines(path: Path, dataset: ReferenceDataset) -> list[ReferenceLine]:
@@ -227,6 +300,40 @@ def _find_index_sheet(sheets: list[Worksheet]) -> Worksheet | None:
     return scored[0][1] if scored and scored[0][0] >= 20 else None
 
 
+def _match_project_sheet(sheets: list[Worksheet], project_name: str, variant: str | None) -> str | None:
+    candidates = [
+        sheet
+        for sheet in sheets
+        if _key(sheet.title) not in {"indexen", "vormfactoren", "kengetallen geindexeerd", "kengetallen geïndexeerd"}
+    ]
+    project_key = _compact_key(project_name)
+    variant_key = _compact_key(variant or "")
+    best_score = 0
+    best_title = None
+    for sheet in candidates:
+        title_key = _compact_key(sheet.title)
+        score = 0
+        if title_key and title_key in project_key:
+            score += 50
+        if project_key and project_key in title_key:
+            score += 50
+        if variant_key and variant_key in title_key:
+            score += 15
+        if score == 0:
+            for row in range(1, min(sheet.max_row, 12) + 1):
+                row_text = " ".join(_text(sheet.cell(row=row, column=column).value) for column in range(1, min(sheet.max_column, 12) + 1))
+                row_key = _compact_key(row_text)
+                if project_key and project_key in row_key:
+                    score += 40
+                    break
+                if variant_key and variant_key in row_key:
+                    score += 15
+        if score > best_score:
+            best_score = score
+            best_title = sheet.title
+    return best_title if best_score >= 20 else None
+
+
 def _find_header_blocks(sheet: Worksheet) -> list[dict[str, Any]]:
     blocks: list[dict[str, Any]] = []
     current_section = ""
@@ -259,6 +366,10 @@ def _find_header_blocks(sheet: Worksheet) -> list[dict[str, Any]]:
 
 def _key(value: Any) -> str:
     return re.sub(r"\s+", " ", _text(value).lower().replace("bdb-", "bdb")).strip(" :")
+
+
+def _compact_key(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", "", _text(value).lower())
 
 
 def _cell(sheet: Worksheet, row: int, column: int | None) -> Any:
@@ -306,6 +417,15 @@ def _date(value: Any) -> datetime | None:
         except ValueError:
             continue
     return None
+
+
+def _period_start(period: str) -> datetime | None:
+    match = re.search(r"(\d{4})\s*[-_ ]?\s*q([1-4])", period.lower())
+    if match:
+        year = int(match.group(1))
+        quarter = int(match.group(2))
+        return datetime(year, 1 + (quarter - 1) * 3, 1)
+    return _date(period)
 
 
 if __name__ == "__main__":

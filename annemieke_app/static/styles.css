@@ -971,6 +971,225 @@ textarea {
   font-size: 12px;
 }
 
+.kengetal-commandbar {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(420px, 1.1fr);
+  gap: 10px 14px;
+  align-items: end;
+}
+
+.kengetal-commandbar-title p {
+  max-width: 780px;
+  margin: 4px 0 0;
+  color: var(--soft);
+}
+
+.kengetal-search,
+.kengetal-upload-row {
+  display: grid;
+  gap: 8px;
+}
+
+.kengetal-search {
+  grid-template-columns: minmax(220px, 1fr) 112px;
+}
+
+.kengetal-upload-row {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(160px, 0.7fr) minmax(240px, 1fr) 150px 120px;
+}
+
+.kengetal-summary-strip {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.kengetal-summary-strip article {
+  min-height: 56px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(2, 22, 43, 0.58);
+}
+
+.kengetal-summary-strip strong,
+.kengetal-summary-strip span {
+  display: block;
+}
+
+.kengetal-summary-strip strong {
+  color: #fff;
+  font-size: 20px;
+}
+
+.kengetal-summary-strip span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.compact-heading {
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.kengetal-source-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.kengetal-source-list span {
+  max-width: 260px;
+  overflow: hidden;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(2, 22, 43, 0.42);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kengetal-index-panel {
+  overflow: hidden;
+}
+
+.kengetal-index-scroll {
+  max-height: calc(100vh - 310px);
+  min-height: 440px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  scrollbar-gutter: stable;
+}
+
+.kengetal-index-row {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.5fr) minmax(120px, 0.7fr) minmax(150px, 0.8fr) 96px 84px 82px repeat(17, minmax(86px, 0.56fr)) 78px;
+  gap: 6px;
+  align-items: center;
+  min-width: 2140px;
+  min-height: 38px;
+  padding: 5px 9px;
+  border-top: 1px solid rgba(126, 169, 219, 0.14);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.kengetal-index-head {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  min-height: 42px;
+  color: #c9d9ed;
+  background: #25465f;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.kengetal-index-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kengetal-project-cell strong,
+.kengetal-project-cell small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kengetal-project-cell small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.numeric-cell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.kengetal-section {
+  min-width: 2140px;
+}
+
+.kengetal-section summary {
+  position: sticky;
+  top: 42px;
+  z-index: 3;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid rgba(126, 169, 219, 0.18);
+  color: #fff;
+  background: linear-gradient(90deg, #173d57, #204b63);
+  cursor: pointer;
+  list-style: none;
+}
+
+.kengetal-section summary::-webkit-details-marker {
+  display: none;
+}
+
+.kengetal-section summary span {
+  color: #ffffff;
+  font-weight: 900;
+}
+
+.kengetal-section summary small {
+  color: #c7d7e9;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.modal-panel.kengetal-project-modal {
+  width: min(980px, calc(100vw - 42px));
+}
+
+.kengetal-project-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.kengetal-project-form label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.kengetal-project-form input {
+  min-height: 36px;
+}
+
+.kengetal-category-editor {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(2, 22, 43, 0.4);
+}
+
+.kengetal-project-form button {
+  grid-column: 1 / -1;
+}
+
 .normalization-workbench {
   display: grid;
   gap: 12px;
@@ -2202,6 +2421,9 @@ pre {
   .pipeline-grid,
   .module-grid,
   .normalization-command,
+  .kengetal-commandbar,
+  .kengetal-upload-row,
+  .kengetal-summary-strip,
   .data-grid,
   .input-overview,
   .consult-form,
@@ -2220,6 +2442,10 @@ pre {
   .status-form,
   .field-form,
   .filter-form,
+  .kengetal-search,
+  .kengetal-upload-row,
+  .kengetal-project-form,
+  .kengetal-category-editor,
   .meta-form {
     display: grid;
     grid-template-columns: 1fr;

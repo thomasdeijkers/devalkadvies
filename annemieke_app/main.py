@@ -28,6 +28,7 @@ from .models import (
     NormalizationTerm,
     OpenAIUsageEvent,
     PriceIndexSeries,
+    PriceIndexValue,
     Project,
     ReferenceDataset,
     ReferenceLine,
@@ -54,6 +55,26 @@ APP_STARTED_AT = time.time()
 MONEY_TEXT_PATTERN = re.compile(
     r"(?:€\s*)?-?(?:\d{1,3}(?:[.\s]\d{3})+(?:,\d{2})?|\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d+(?:[.,]\d{2}))"
 )
+REFERENCE_INDEX_TYPE = "kengetal_index"
+REFERENCE_CATEGORY_COLUMNS: list[tuple[str, str]] = [
+    ("algemeen", "Algemeen"),
+    ("sloopwerk", "Sloopwerk"),
+    ("fundering", "Fundering"),
+    ("skelet", "Skelet"),
+    ("daken", "Daken"),
+    ("gevel", "Gevel"),
+    ("binnenwanden", "Binnenwanden"),
+    ("vloerafwerking", "Vloerafwerking"),
+    ("trappen", "Trappen"),
+    ("plafondafwerking", "Plafondafwerking"),
+    ("vaste inrichting", "Vaste inrichting"),
+    ("terrein", "Terrein"),
+    ("w installatie", "W installatie"),
+    ("e installatie", "E installatie"),
+    ("t installatie", "T installatie"),
+    ("bouwkundig", "Bouwkundig"),
+    ("installatie", "Installatie"),
+]
 
 
 def euro(value: Decimal | int | float | str | None) -> str:
@@ -273,6 +294,8 @@ def _render_workspace(
     ).all()
     reference_line_count = session.scalar(select(func.count(ReferenceLine.id))) or 0
     reference_lines = _reference_lines(session, query) if active_page == "kengetallen" else []
+    reference_index_sections = _reference_index_sections(session, query) if active_page == "kengetallen" else []
+    reference_index_summary = _reference_index_summary(session, reference_index_sections) if active_page == "kengetallen" else {}
     assessment_documents = session.scalars(
         select(IncomingDocument)
         .where(IncomingDocument.document_type == "begroting_beoordeling")
@@ -307,6 +330,9 @@ def _render_workspace(
             "scheduled_jobs": scheduled_jobs,
             "reference_datasets": reference_datasets,
             "reference_lines": reference_lines,
+            "reference_index_sections": reference_index_sections,
+            "reference_index_summary": reference_index_summary,
+            "reference_category_columns": REFERENCE_CATEGORY_COLUMNS,
             "assessment_templates": assessment_templates,
             "assessment_documents": assessment_documents,
             "reference_line_count": reference_line_count,
@@ -771,6 +797,94 @@ def delete_reference_dataset(dataset_id: int, session: Session = Depends(get_ses
     if file_path and file_path.exists():
         file_path.unlink()
     return RedirectResponse("/kengetallen", status_code=303)
+
+
+@app.post("/kengetallen/index-project")
+async def update_reference_index_project(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    form = await request.form()
+    dataset_id = _int_or_none(str(form.get("dataset_id", "")))
+    source_row = _int_or_none(str(form.get("source_row", "")))
+    if dataset_id is None or source_row is None:
+        raise HTTPException(status_code=400, detail="Kengetalproject mist dataset of bronrij.")
+
+    dataset = session.get(ReferenceDataset, dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="Kengetallendataset niet gevonden.")
+
+    lines = session.scalars(
+        select(ReferenceLine)
+        .where(ReferenceLine.dataset_id == dataset_id)
+        .where(ReferenceLine.source_row == source_row)
+        .where(ReferenceLine.regel_type == REFERENCE_INDEX_TYPE)
+    ).all()
+    if not lines:
+        raise HTTPException(status_code=404, detail="Kengetalproject niet gevonden.")
+
+    section = str(form.get("section", "") or lines[0].hoofdstuk_omschrijving or "Overig").strip()
+    project_name = str(form.get("project_name", "") or "").strip()
+    variant = str(form.get("variant", "") or "").strip() or None
+    phase = str(form.get("phase", "") or "").strip() or None
+    period = str(form.get("period", "") or "").strip() or None
+    project_sheet_name = str(form.get("project_sheet_name", "") or "").strip() or None
+    document_date = _date_or_none(str(form.get("document_date", "") or ""))
+    bdb_indexering = _decimal_or_none(str(form.get("bdb_indexering", "") or ""))
+    line_by_category = {(line.post_code or line.hoofdstuk_code or "").lower(): line for line in lines}
+    max_line_number = session.scalar(select(func.max(ReferenceLine.line_number)).where(ReferenceLine.dataset_id == dataset_id)) or 0
+    changed_lines: list[ReferenceLine] = []
+
+    for category_key, category_label in REFERENCE_CATEGORY_COLUMNS:
+        safe_category_key = category_key.replace(" ", "_")
+        value = _decimal_or_none(
+            str(form.get(f"cat_{safe_category_key}", form.get(f"cat_{category_key}", "")) or "")
+        )
+        line = line_by_category.get(category_key)
+        if value is None:
+            if line is not None:
+                session.delete(line)
+            continue
+        if line is None:
+            max_line_number += 1
+            line = ReferenceLine(
+                dataset_id=dataset.id,
+                line_number=max_line_number,
+                regel_type=REFERENCE_INDEX_TYPE,
+                niveau=0,
+                hoofdstuk_code=category_key,
+                post_code=category_key,
+                hoeveelheid=Decimal("1"),
+                eenheid="m2 bvo",
+                confidence=100,
+            )
+            session.add(line)
+        line.hoofdstuk_code = category_key
+        line.hoofdstuk_omschrijving = section
+        line.post_code = category_key
+        line.project_name = project_name or None
+        line.relation_name = variant
+        line.document_date = document_date
+        line.phase = phase
+        line.period = period
+        line.bdb_indexering = bdb_indexering
+        line.project_sheet_name = project_sheet_name
+        line.source_row = source_row
+        line.omschrijving_werkzaamheden = f"{category_label} - {section}"
+        line.hoeveelheid = Decimal("1")
+        line.eenheid = "m2 bvo"
+        line.norm_arbeid = bdb_indexering
+        line.eenheidsprijs = value
+        line.totaal_prijs_per_regel = value
+        line.confidence = 100
+        if not line.raw_text:
+            line.raw_text = f"{dataset.original_filename or dataset.name}|rij:{source_row}|categorie:{category_key}"
+        changed_lines.append(line)
+
+    if changed_lines:
+        apply_normalization(session, changed_lines)
+    session.commit()
+    return RedirectResponse("/kengetallen?notice=kengetal_project_opgeslagen#kengetal-index", status_code=303)
 
 
 @app.post("/normalisatie/terms")
@@ -1722,11 +1836,146 @@ def _reference_lines(session: Session, query: str | None, limit: int = 300) -> l
                 ReferenceLine.normalized_omschrijving.ilike(search),
                 ReferenceLine.normalized_key.ilike(search),
                 ReferenceLine.eenheid.ilike(search),
+                ReferenceLine.phase.ilike(search),
+                ReferenceLine.period.ilike(search),
+                ReferenceLine.project_sheet_name.ilike(search),
             )
         )
     return session.scalars(
         statement.order_by(ReferenceDataset.created_at.desc(), ReferenceLine.line_number).limit(limit)
     ).unique().all()
+
+
+def _reference_index_sections(session: Session, query: str | None, limit: int = 6000) -> list[dict[str, object]]:
+    category_keys = {key for key, _label in REFERENCE_CATEGORY_COLUMNS}
+    statement = (
+        select(ReferenceLine)
+        .join(ReferenceLine.dataset)
+        .where(ReferenceLine.regel_type == REFERENCE_INDEX_TYPE)
+    )
+    cleaned_query = (query or "").strip()
+    if cleaned_query:
+        search = f"%{cleaned_query}%"
+        statement = statement.where(
+            or_(
+                ReferenceDataset.name.ilike(search),
+                ReferenceDataset.original_filename.ilike(search),
+                ReferenceLine.project_name.ilike(search),
+                ReferenceLine.relation_name.ilike(search),
+                ReferenceLine.hoofdstuk_omschrijving.ilike(search),
+                ReferenceLine.project_sheet_name.ilike(search),
+                ReferenceLine.phase.ilike(search),
+                ReferenceLine.period.ilike(search),
+            )
+        )
+
+    lines = session.scalars(
+        statement.order_by(
+            ReferenceLine.hoofdstuk_omschrijving,
+            ReferenceLine.source_row,
+            ReferenceLine.project_name,
+            ReferenceLine.line_number,
+        ).limit(limit)
+    ).unique().all()
+    grouped: dict[tuple[object, ...], dict[str, object]] = {}
+    section_order: dict[str, int] = {}
+
+    for line in lines:
+        category_key = (line.post_code or line.hoofdstuk_code or "").lower()
+        if category_key not in category_keys:
+            continue
+        section = (line.hoofdstuk_omschrijving or "Overig").strip() or "Overig"
+        if section not in section_order:
+            section_order[section] = len(section_order)
+        row_marker = line.source_row or line.line_number
+        key = (
+            line.dataset_id,
+            section,
+            row_marker,
+            line.project_name or "",
+            line.relation_name or "",
+        )
+        if key not in grouped:
+            grouped[key] = {
+                "dataset_id": line.dataset_id,
+                "dataset_name": line.dataset.name,
+                "source_filename": line.dataset.original_filename or "",
+                "section": section,
+                "source_row": row_marker,
+                "project_name": line.project_name or "",
+                "variant": line.relation_name or "",
+                "phase": line.phase or "",
+                "period": line.period or "",
+                "bdb_indexering": line.bdb_indexering,
+                "project_sheet_name": line.project_sheet_name or "",
+                "document_date": line.document_date,
+                "date_input": line.document_date.strftime("%Y-%m-%d") if line.document_date else "",
+                "date_label": line.document_date.strftime("%d-%m-%Y") if line.document_date else "",
+                "categories": {},
+                "category_ids": {},
+                "category_count": 0,
+                "total": Decimal("0"),
+                "modal_id": f"kengetal-{line.dataset_id}-{row_marker}",
+            }
+        row_data = grouped[key]
+        value = line.eenheidsprijs if line.eenheidsprijs is not None else line.totaal_prijs_per_regel
+        row_data["categories"][category_key] = value
+        row_data["category_ids"][category_key] = line.id
+        row_data["category_count"] = int(row_data["category_count"]) + 1
+        if value is not None:
+            row_data["total"] = Decimal(str(row_data["total"])) + Decimal(str(value))
+        if not row_data["phase"] and line.phase:
+            row_data["phase"] = line.phase
+        if not row_data["period"] and line.period:
+            row_data["period"] = line.period
+        if row_data["bdb_indexering"] is None and line.bdb_indexering is not None:
+            row_data["bdb_indexering"] = line.bdb_indexering
+        if not row_data["project_sheet_name"] and line.project_sheet_name:
+            row_data["project_sheet_name"] = line.project_sheet_name
+
+    sections: dict[str, list[dict[str, object]]] = {}
+    for row_data in grouped.values():
+        sections.setdefault(str(row_data["section"]), []).append(row_data)
+
+    preferred_order = {
+        "bedrijfshallen met kantoor": 0,
+        "kantoor": 1,
+        "woningen": 2,
+    }
+    result: list[dict[str, object]] = []
+    for section, rows in sections.items():
+        rows.sort(key=lambda item: (int(item["source_row"] or 0), str(item["project_name"]).lower()))
+        result.append(
+            {
+                "section": section,
+                "rows": rows,
+                "row_count": len(rows),
+                "category_count": sum(int(row["category_count"]) for row in rows),
+                "sort_key": (preferred_order.get(section.lower(), 50), section_order.get(section, 999), section.lower()),
+            }
+        )
+    result.sort(key=lambda item: item["sort_key"])
+    return result
+
+
+def _reference_index_summary(session: Session, sections: list[dict[str, object]]) -> dict[str, object]:
+    project_count = sum(int(section["row_count"]) for section in sections)
+    category_line_count = sum(int(section["category_count"]) for section in sections)
+    latest_index = session.scalars(
+        select(PriceIndexValue).order_by(PriceIndexValue.effective_date.desc()).limit(1)
+    ).first()
+    index_label = ""
+    index_value = None
+    if latest_index is not None:
+        index_label = latest_index.notes or latest_index.effective_date.strftime("%Y-%m")
+        index_value = latest_index.index_value
+    return {
+        "project_count": project_count,
+        "category_line_count": category_line_count,
+        "section_count": len(sections),
+        "latest_index_label": index_label,
+        "latest_index_value": index_value,
+    }
 
 
 def _normalization_candidate_lines(session: Session, limit: int = 120) -> list[BudgetLine]:
@@ -2427,6 +2676,7 @@ def _flash_message(request: Request) -> str | None:
         "regels_gevalideerd": "Begrotingsregels gevalideerd en document gemarkeerd als verwerkt.",
         "kengetallen_toegevoegd": "Geselecteerde regels zijn toegevoegd aan de kengetallen-database.",
         "geen_kengetallen_geselecteerd": "Geen bruikbare geselecteerde regels met eenheidsprijs gevonden.",
+        "kengetal_project_opgeslagen": "Kengetalproject opgeslagen en opnieuw genormaliseerd.",
     }
     return messages.get(request.query_params.get("notice", ""))
 

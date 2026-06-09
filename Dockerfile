@@ -11,6 +11,7 @@ RUN apt-get update \
 
 COPY pyproject.toml README.md ./
 COPY annemieke_app ./annemieke_app
+COPY scripts ./scripts
 COPY logo.webp ./logo.webp
 
 RUN pip install --no-cache-dir .

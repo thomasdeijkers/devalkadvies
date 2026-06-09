@@ -114,92 +114,123 @@
   {% endif %}
 
   {% if active_page == "kengetallen" %}
-  <section class="module-grid">
-    <article class="panel data-form-panel">
+  <section class="panel kengetal-commandbar">
+    <div class="kengetal-commandbar-title">
       <span class="chip automatic">Historische cijfers</span>
-      <h3>Kengetallenbestand uploaden</h3>
-      <p>Upload een Excelbestand met dezelfde basisvelden als de begrotingsregels. Deze regels vormen straks de referentiedatabase voor beoordeling.</p>
-      <form action="/kengetallen/upload" method="post" enctype="multipart/form-data" class="stack-form">
-        <input name="name" placeholder="Naam dataset, bv. Woningbouw 2024" required>
-        <input name="source" placeholder="Bron / leverancier / opdrachtgever">
-        <textarea name="notes" placeholder="Notities over peildatum, regio, projecttype of bijzonderheden"></textarea>
-        <label class="file-picker wide">
-          <input name="file" type="file" accept=".xlsx,.xlsm" required>
-          <span>Excel kengetallen kiezen</span>
-        </label>
-        <button type="submit">Kengetallen importeren</button>
-      </form>
-    </article>
-    <article class="panel card-list-panel">
-      <span class="chip manual">Database</span>
-      <h3>Beschikbare kengetallen</h3>
-      <div class="metric-strip">
-        <p><strong>{{ reference_datasets|length }}</strong><span>datasets</span></p>
-        <p><strong>{{ reference_line_count }}</strong><span>regels</span></p>
-      </div>
-      <div class="entity-list">
-        {% for dataset in reference_datasets %}
-          <article class="entity-row">
-            <div>
-              <span class="entity-type">{{ dataset.status }}</span>
-              <strong>{{ dataset.name }}</strong>
-              <small>{{ dataset.lines|length }} regels - {{ dataset.original_filename or "handmatig" }}</small>
-            </div>
-            <form action="/kengetallen/{{ dataset.id }}/delete" method="post" onsubmit="return confirm('Deze kengetallendataset verwijderen?');">
-              <button class="mini-button danger" type="submit">Verwijderen</button>
-            </form>
-          </article>
-        {% else %}
-          <p class="muted">Nog geen kengetallenbestand geupload.</p>
-        {% endfor %}
-      </div>
-    </article>
-  </section>
-  <section class="panel reference-search-panel">
-    <div class="section-heading">
-      <div>
-        <span class="eyebrow">Referentieregels</span>
-        <h2>Zoeken in kengetallen</h2>
-        <p>Zoek op dataset, project, relatie, omschrijving, eenheid of genormaliseerde term.</p>
-      </div>
-      <form action="/kengetallen" method="get" class="filter-form">
-        <input name="q" value="{{ selected_query }}" placeholder="Zoek kengetal">
-        <button type="submit">Zoeken</button>
-      </form>
+      <h3>Kengetallen index</h3>
+      <p>Rubricering volgt het Excelbestand: projecten per onderdeel, met BDB-indexering en categorieprijzen naast elkaar.</p>
     </div>
-    <div class="reference-table">
-      {% if reference_lines %}
-        <div class="reference-row reference-head">
-          <span>Dataset</span>
-          <span>Project</span>
-          <span>Relatie</span>
-          <span>Omschrijving</span>
-          <span>Hvh</span>
-          <span>Ehd</span>
-          <span>Ehprijs</span>
-          <span>Normaalvorm</span>
-        </div>
-        {% for line in reference_lines %}
-          <div class="reference-row">
-            <span><strong>{{ line.dataset.name }}</strong><small>{{ line.dataset.source or line.dataset.original_filename or "" }}</small></span>
-            <span>{{ line.project_name or "-" }}</span>
-            <span>{{ line.relation_name or "-" }}</span>
-            <span>{{ line.omschrijving_werkzaamheden }}</span>
-            <span>{{ line.hoeveelheid|amount }}</span>
-            <span>{{ line.eenheid or "" }}</span>
-            <span>{{ line|unit_price|euro }}</span>
-            <span>
-              {{ line.normalized_omschrijving or "-" }}
-              {% if line.normalization_method %}<small>{{ line.normalization_method }} - {{ line.normalization_score }}%</small>{% endif %}
-            </span>
-          </div>
+    <form action="/kengetallen" method="get" class="kengetal-search">
+      <input name="q" value="{{ selected_query }}" placeholder="Zoek project, rubriek, fase, periode of tabblad">
+      <button type="submit">Zoeken</button>
+    </form>
+    <form action="/kengetallen/upload" method="post" enctype="multipart/form-data" class="kengetal-upload-row">
+      <input name="name" placeholder="Importnaam" required>
+      <input name="source" placeholder="Bronbestand / toelichting">
+      <input type="hidden" name="notes" value="Handmatige upload vanuit kengetallenmenu.">
+      <label class="file-picker">
+        <input name="file" type="file" accept=".xlsx,.xlsm" required>
+        <span>Excel kiezen</span>
+      </label>
+      <button type="submit">Importeren</button>
+    </form>
+    <div class="kengetal-summary-strip">
+      <article><strong>{{ reference_index_summary.project_count or 0 }}</strong><span>projectregels</span></article>
+      <article><strong>{{ reference_index_summary.section_count or 0 }}</strong><span>rubrieken</span></article>
+      <article><strong>{{ reference_index_summary.category_line_count or 0 }}</strong><span>categorieprijzen</span></article>
+      <article>
+        <strong>{% if reference_index_summary.latest_index_value %}{{ reference_index_summary.latest_index_value|amount }}{% else %}-{% endif %}</strong>
+        <span>index {{ reference_index_summary.latest_index_label or "nog leeg" }}</span>
+      </article>
+    </div>
+  </section>
+
+  <section id="kengetal-index" class="panel kengetal-index-panel">
+    <div class="section-heading compact-heading">
+      <div>
+        <span class="eyebrow">Referentie-index</span>
+        <h2>Kengetallen per rubriek</h2>
+      </div>
+      <div class="kengetal-source-list">
+        {% for dataset in reference_datasets %}
+          <span>{{ dataset.name }}</span>
+        {% else %}
+          <span>Nog geen bronbestand</span>
         {% endfor %}
+      </div>
+    </div>
+    <div class="kengetal-index-scroll">
+      <div class="kengetal-index-row kengetal-index-head">
+        <span>Project</span>
+        <span>Variant</span>
+        <span>Fase</span>
+        <span>Peildatum</span>
+        <span>Periode</span>
+        <span>BDB-index</span>
+        {% for category_key, category_label in reference_category_columns %}
+          <span>{{ category_label }}</span>
+        {% endfor %}
+        <span>Actie</span>
+      </div>
+      {% for section in reference_index_sections %}
+        <details class="kengetal-section" open>
+          <summary>
+            <span>{{ section.section }}</span>
+            <small>{{ section.row_count }} projecten - {{ section.category_count }} prijzen</small>
+          </summary>
+          {% for row in section.rows %}
+            <div class="kengetal-index-row">
+              <span class="kengetal-project-cell">
+                <strong>{{ row.project_name or "-" }}</strong>
+                <small>{{ row.project_sheet_name or row.source_filename or "" }}</small>
+              </span>
+              <span>{{ row.variant or "-" }}</span>
+              <span>{{ row.phase or "-" }}</span>
+              <span>{{ row.date_label or "-" }}</span>
+              <span>{{ row.period or "-" }}</span>
+              <span>{{ row.bdb_indexering|amount if row.bdb_indexering else "-" }}</span>
+              {% for category_key, category_label in reference_category_columns %}
+                {% set value = row.categories.get(category_key) %}
+                <span class="numeric-cell">{{ value|amount if value is not none else "-" }}</span>
+              {% endfor %}
+              <span><a class="mini-button" href="#{{ row.modal_id }}">Openen</a></span>
+            </div>
+            <div id="{{ row.modal_id }}" class="modal-card">
+              <a class="modal-backdrop" href="#kengetal-index" aria-label="Sluiten"></a>
+              <section class="modal-panel wide kengetal-project-modal">
+                <a class="modal-close" href="#kengetal-index">Sluiten</a>
+                <span class="eyebrow">Kengetalproject</span>
+                <h3>{{ row.project_name or "Project zonder naam" }}</h3>
+                <form action="/kengetallen/index-project" method="post" class="kengetal-project-form">
+                  <input type="hidden" name="dataset_id" value="{{ row.dataset_id }}">
+                  <input type="hidden" name="source_row" value="{{ row.source_row }}">
+                  <input type="hidden" name="section" value="{{ row.section }}">
+                  <label>Project<input name="project_name" value="{{ row.project_name }}"></label>
+                  <label>Variant<input name="variant" value="{{ row.variant }}"></label>
+                  <label>Fase<input name="phase" value="{{ row.phase }}"></label>
+                  <label>Peildatum<input type="date" name="document_date" value="{{ row.date_input }}"></label>
+                  <label>Periode<input name="period" value="{{ row.period }}"></label>
+                  <label>BDB-indexering<input name="bdb_indexering" value="{{ row.bdb_indexering|amount if row.bdb_indexering else '' }}"></label>
+                  <label>Projecttabblad<input name="project_sheet_name" value="{{ row.project_sheet_name }}"></label>
+                  <div class="kengetal-category-editor">
+                    {% for category_key, category_label in reference_category_columns %}
+                      {% set value = row.categories.get(category_key) %}
+                      {% set safe_key = category_key|replace(" ", "_") %}
+                      <label>{{ category_label }}<input name="cat_{{ safe_key }}" value="{{ value|amount if value is not none else '' }}"></label>
+                    {% endfor %}
+                  </div>
+                  <button type="submit">Opslaan</button>
+                </form>
+              </section>
+            </div>
+          {% endfor %}
+        </details>
       {% else %}
         <div class="empty-state">
-          <strong>Geen kengetallenregels gevonden</strong>
-          <span>Upload een bestand of pas je zoekterm aan.</span>
+          <strong>Geen kengetallenindex gevonden</strong>
+          <span>Laad het DeValk kengetallenbestand met het importscript of upload een Excelbestand.</span>
         </div>
-      {% endif %}
+      {% endfor %}
     </div>
   </section>
   {% endif %}
