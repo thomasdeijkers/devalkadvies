@@ -1119,10 +1119,10 @@ textarea {
 
 .kengetal-index-row {
   display: grid;
-  grid-template-columns: 300px 120px 140px 100px 92px 86px repeat(17, 116px) 76px 76px 76px;
-  column-gap: 8px;
+  grid-template-columns: 330px 130px 150px 108px 98px 92px repeat(17, 124px) 82px 92px 82px;
+  column-gap: 10px;
   align-items: center;
-  min-width: 3210px;
+  min-width: 3500px;
   min-height: 36px;
   padding: 4px 8px;
   border-top: 1px solid rgba(126, 169, 219, 0.14);
@@ -1136,9 +1136,9 @@ textarea {
   min-height: 42px;
   color: #c9d9ed;
   background: #25465f;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .kengetal-index-row span {
@@ -1159,6 +1159,12 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.kengetal-index-row .numeric-cell {
+  justify-content: flex-end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .kengetal-project-cell strong,
@@ -1361,18 +1367,19 @@ textarea {
 }
 
 .kengetal-section {
-  min-width: 3210px;
+  min-width: 3500px;
 }
 
 .kengetal-section summary {
   position: sticky;
   top: 42px;
   z-index: 3;
-  display: flex;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: 330px 130px 150px 108px 98px 92px 1fr 82px;
+  gap: 10px;
   align-items: center;
   min-height: 40px;
-  padding: 0 14px;
+  padding: 0 12px;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid rgba(126, 169, 219, 0.18);
   color: #fff;
@@ -1396,23 +1403,60 @@ textarea {
   font-weight: 800;
 }
 
+.kengetal-section summary::before {
+  content: "+";
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-items: center;
+  border: 1px solid rgba(117, 194, 226, 0.45);
+  border-radius: 6px;
+  color: #8bd5e6;
+  background: rgba(2, 22, 43, 0.35);
+}
+
+.kengetal-section[open] summary::before {
+  content: "-";
+}
+
+.kengetal-section:not([open]) summary {
+  margin-bottom: 2px;
+}
+
 .modal-panel.kengetal-project-modal {
-  width: min(980px, calc(100vw - 42px));
+  width: min(1280px, calc(100vw - 48px));
+  max-height: calc(100vh - 44px);
+  overflow: auto;
+  padding: 26px 28px 22px;
+}
+
+.kengetal-project-modal .eyebrow {
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.kengetal-project-modal h3 {
+  max-width: 1040px;
+  margin: 4px 0 14px;
+  font-size: 24px;
+  line-height: 1.25;
 }
 
 .kengetal-project-form {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 9px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .kengetal-source-note {
   grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  padding: 8px 10px;
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 6px 12px;
+  align-items: start;
+  padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: rgba(2, 22, 43, 0.45);
@@ -1420,13 +1464,19 @@ textarea {
 
 .kengetal-source-note strong {
   color: #8bd5e6;
-  font-size: 11px;
-  text-transform: uppercase;
+  font-size: 12px;
+  text-transform: none;
 }
 
 .kengetal-source-note span {
   color: var(--soft);
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.kengetal-source-note span:last-child {
+  grid-column: 2;
 }
 
 .kengetal-category-editor label small {
@@ -1435,29 +1485,30 @@ textarea {
   overflow: hidden;
   color: var(--muted);
   font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  white-space: normal;
 }
 
 .kengetal-project-form label {
   display: grid;
-  gap: 4px;
-  color: var(--muted);
-  font-size: 11px;
+  gap: 6px;
+  color: #c7d7e9;
+  font-size: 12px;
   font-weight: 900;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .kengetal-project-form input {
-  min-height: 36px;
+  min-height: 42px;
+  font-size: 14px;
 }
 
 .kengetal-category-editor {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  padding: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: rgba(2, 22, 43, 0.4);
