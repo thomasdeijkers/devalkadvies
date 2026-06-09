@@ -1861,6 +1861,7 @@ def _reference_lines(session: Session, query: str | None, limit: int = 300) -> l
 
 def _reference_index_sections(session: Session, query: str | None, limit: int = 6000) -> list[dict[str, object]]:
     category_keys = {key for key, _label in REFERENCE_CATEGORY_COLUMNS}
+    index_lookup = _price_index_lookup(session)
     statement = (
         select(ReferenceLine)
         .join(ReferenceLine.dataset)
@@ -1905,24 +1906,15 @@ def _reference_index_sections(session: Session, query: str | None, limit: int = 
         phase = line.phase or raw_meta.get("fase") or ""
         period = line.period or raw_meta.get("periode") or ""
         bdb_indexering = line.bdb_indexering if line.bdb_indexering is not None else line.norm_arbeid
-        source_key = (
-            source_row
-            if source_row is not None
-            else (
-                line.project_name or "",
-                line.relation_name or "",
-                line.document_date.strftime("%Y-%m-%d") if line.document_date else "",
-                phase,
-                period,
-                str(bdb_indexering or ""),
-            )
-        )
         key = (
             line.dataset_id,
             section,
-            source_key,
             line.project_name or "",
             line.relation_name or "",
+            line.document_date.strftime("%Y-%m-%d") if line.document_date else "",
+            phase,
+            period,
+            str(bdb_indexering or ""),
         )
         if key not in grouped:
             modal_key = str(source_row or abs(hash(key))).replace("-", "m")
@@ -1938,12 +1930,14 @@ def _reference_index_sections(session: Session, query: str | None, limit: int = 
                 "phase": phase,
                 "period": period,
                 "bdb_indexering": bdb_indexering,
+                "index_reference": _reference_index_reference(index_lookup, period, bdb_indexering),
                 "project_sheet_name": line.project_sheet_name or "",
                 "document_date": line.document_date,
                 "date_input": line.document_date.strftime("%Y-%m-%d") if line.document_date else "",
                 "date_label": line.document_date.strftime("%d-%m-%Y") if line.document_date else "",
                 "categories": {},
                 "category_ids": {},
+                "source_rows": [],
                 "category_count": 0,
                 "total": Decimal("0"),
                 "modal_id": f"kengetal-{line.dataset_id}-{modal_key}",
@@ -1953,6 +1947,11 @@ def _reference_index_sections(session: Session, query: str | None, limit: int = 
         row_data["categories"][category_key] = value
         row_data["category_ids"][category_key] = line.id
         row_data["category_count"] = int(row_data["category_count"]) + 1
+        if source_row and source_row not in row_data["source_rows"]:
+            row_data["source_rows"].append(source_row)
+            row_data["source_row_label"] = ", ".join(str(row) for row in row_data["source_rows"][:4])
+            if len(row_data["source_rows"]) > 4:
+                row_data["source_row_label"] += "..."
         if value is not None:
             row_data["total"] = Decimal(str(row_data["total"])) + Decimal(str(value))
         if not row_data["phase"] and phase:
@@ -2013,6 +2012,43 @@ def _reference_index_summary(session: Session, sections: list[dict[str, object]]
             for value in index_values
         ],
     }
+
+
+def _price_index_lookup(session: Session) -> dict[str, PriceIndexValue]:
+    values = session.scalars(select(PriceIndexValue).order_by(PriceIndexValue.effective_date.desc())).all()
+    lookup: dict[str, PriceIndexValue] = {}
+    for value in values:
+        keys = {
+            value.notes or "",
+            f"{value.effective_date.year}-Q{((value.effective_date.month - 1) // 3) + 1}",
+        }
+        for key in keys:
+            cleaned = _period_key(key)
+            if cleaned:
+                lookup[cleaned] = value
+    return lookup
+
+
+def _period_key(value: str | None) -> str:
+    return re.sub(r"[^0-9q]+", "", (value or "").lower())
+
+
+def _reference_index_reference(
+    index_lookup: dict[str, PriceIndexValue],
+    period: str | None,
+    bdb_indexering: Decimal | None,
+) -> str:
+    if not period and bdb_indexering is None:
+        return ""
+    index_value = index_lookup.get(_period_key(period))
+    parts: list[str] = []
+    if index_value is not None:
+        parts.append(f"INDEXEN {index_value.notes or period}: {amount(index_value.index_value)}")
+    elif period:
+        parts.append(f"INDEXEN {period}: niet geladen")
+    if bdb_indexering is not None:
+        parts.append(f"BDB factor {amount(bdb_indexering)}")
+    return " | ".join(parts)
 
 
 def _reference_raw_meta(raw_text: str | None) -> dict[str, str]:

@@ -20,20 +20,31 @@
             <small>Begrotingsparser</small>
           </span>
         </a>
-        <nav class="side-nav" aria-label="Hoofdmenu">
-          <a class="{% if active_page == 'overview' %}active{% endif %}" href="/"><span>Overzicht</span><i></i></a>
-          <a class="{% if active_page == 'kengetallen' %}active{% endif %}" href="/kengetallen"><span>Kengetallen</span><i></i></a>
-          <a class="{% if active_page == 'beoordeling' %}active{% endif %}" href="/beoordeling"><span>Beoordeling</span><i></i></a>
-          <a class="{% if active_page == 'templates' %}active{% endif %}" href="/templates"><span>Templates</span><i></i></a>
-          <a class="{% if active_page == 'documents' %}active{% endif %}" href="/documents"><span>Invoer historie</span><i></i></a>
-          <a class="{% if active_page == 'consult' %}active{% endif %}" href="/consult"><span>Zoeken</span><i></i></a>
-          <a class="{% if active_page == 'normalisatie' %}active{% endif %}" href="/normalisatie"><span>Normalisatie</span><i></i></a>
-          <a class="{% if active_page == 'relations' %}active{% endif %}" href="/relations"><span>Relaties</span><i></i></a>
-          <a class="{% if active_page == 'projects' %}active{% endif %}" href="/projects"><span>Projecten</span><i></i></a>
-          <a class="{% if active_page == 'indices' %}active{% endif %}" href="/indices"><span>Indexering</span><i></i></a>
-          <a class="{% if active_page == 'jobs' %}active{% endif %}" href="/jobs"><span>Cronjobs</span><i class="warn"></i></a>
-          <a class="{% if active_page == 'server' %}active{% endif %}" href="/server"><span>Server</span><i class="warn"></i></a>
-          <a class="{% if active_page == 'settings' %}active{% endif %}" href="/server"><span>Instellingen</span><i class="idle"></i></a>
+        <nav class="side-nav grouped-nav" aria-label="Hoofdmenu">
+          <div class="nav-group">
+            <span class="nav-group-label">Begrotingen</span>
+            <a class="{% if active_page == 'overview' %}active{% endif %}" href="/"><span>Overzicht</span><i></i></a>
+            <a class="{% if active_page == 'documents' %}active{% endif %}" href="/documents"><span>Invoer</span><i></i></a>
+            <a class="{% if active_page == 'beoordeling' %}active{% endif %}" href="/beoordeling"><span>Beoordeling</span><i></i></a>
+          </div>
+          <div class="nav-group">
+            <span class="nav-group-label">Referenties</span>
+            <a class="{% if active_page == 'kengetallen' %}active{% endif %}" href="/kengetallen"><span>Kengetallen</span><i></i></a>
+            <a class="{% if active_page == 'indices' %}active{% endif %}" href="/indices"><span>Indexering</span><i></i></a>
+            <a class="{% if active_page == 'normalisatie' %}active{% endif %}" href="/normalisatie"><span>Normalisatie</span><i></i></a>
+          </div>
+          <div class="nav-group">
+            <span class="nav-group-label">Basisgegevens</span>
+            <a class="{% if active_page == 'projects' %}active{% endif %}" href="/projects"><span>Projecten</span><i></i></a>
+            <a class="{% if active_page == 'relations' %}active{% endif %}" href="/relations"><span>Relaties</span><i></i></a>
+            <a class="{% if active_page == 'templates' %}active{% endif %}" href="/templates"><span>Templates</span><i></i></a>
+          </div>
+          <div class="nav-group">
+            <span class="nav-group-label">Beheer</span>
+            <a class="{% if active_page == 'jobs' %}active{% endif %}" href="/jobs"><span>Cronjobs</span><i class="warn"></i></a>
+            <a class="{% if active_page == 'server' %}active{% endif %}" href="/server"><span>Server</span><i class="warn"></i></a>
+            <a class="{% if active_page == 'settings' %}active{% endif %}" href="/settings"><span>Instellingen</span><i class="idle"></i></a>
+          </div>
         </nav>
         <div class="sidebar-footer">
           <div class="sidebar-status">

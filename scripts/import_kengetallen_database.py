@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from datetime import datetime
@@ -12,10 +13,25 @@ from uuid import uuid4
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy import select
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+_database_url = os.getenv("DATABASE_URL", "")
+if _database_url:
+    try:
+        make_url(_database_url)
+    except ArgumentError as exc:
+        raise SystemExit(
+            "DATABASE_URL is geen geldige database-url. Zet hem eerst goed in PowerShell, bijvoorbeeld:\n"
+            "$env:DATABASE_URL='postgresql+psycopg://gebruiker:wachtwoord@host:5432/devalkadvies'\n"
+            "Let op: speciale tekens in het wachtwoord moeten URL-encoded zijn, bijvoorbeeld @ = %40."
+        ) from exc
+    if "<" in _database_url or ">" in _database_url:
+        raise SystemExit("DATABASE_URL bevat nog placeholder-tekst met <...>. Vul de echte database-url in.")
 
 from annemieke_app.config import settings  # noqa: E402
 from annemieke_app.database import SessionLocal, create_db  # noqa: E402
