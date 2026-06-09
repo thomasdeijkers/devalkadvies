@@ -1029,6 +1029,32 @@ textarea {
   font-size: 12px;
 }
 
+.kengetal-index-chips {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.kengetal-index-chips strong,
+.kengetal-index-chips span {
+  min-height: 26px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(2, 22, 43, 0.5);
+  font-size: 11px;
+}
+
+.kengetal-index-chips strong {
+  color: #fff;
+}
+
+.kengetal-index-chips span {
+  color: var(--muted);
+}
+
 .compact-heading {
   gap: 12px;
   margin-bottom: 10px;
@@ -1069,10 +1095,10 @@ textarea {
 
 .kengetal-index-row {
   display: grid;
-  grid-template-columns: minmax(260px, 1.5fr) minmax(120px, 0.7fr) minmax(150px, 0.8fr) 96px 84px 82px repeat(17, minmax(86px, 0.56fr)) 78px;
+  grid-template-columns: minmax(260px, 1.5fr) minmax(120px, 0.7fr) minmax(150px, 0.8fr) 96px 84px 82px repeat(17, minmax(104px, 0.62fr)) minmax(250px, 1fr) 78px;
   gap: 6px;
   align-items: center;
-  min-width: 2140px;
+  min-width: 2600px;
   min-height: 38px;
   padding: 5px 9px;
   border-top: 1px solid rgba(126, 169, 219, 0.14);
@@ -1116,8 +1142,13 @@ textarea {
   font-variant-numeric: tabular-nums;
 }
 
+.source-cell {
+  color: var(--muted);
+  font-size: 10px;
+}
+
 .kengetal-section {
-  min-width: 2140px;
+  min-width: 2600px;
 }
 
 .kengetal-section summary {
@@ -1160,6 +1191,29 @@ textarea {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 9px;
+}
+
+.kengetal-source-note {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(2, 22, 43, 0.45);
+}
+
+.kengetal-source-note strong {
+  color: #8bd5e6;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.kengetal-source-note span {
+  color: var(--soft);
+  font-size: 12px;
 }
 
 .kengetal-project-form label {

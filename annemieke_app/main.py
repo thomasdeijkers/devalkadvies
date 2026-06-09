@@ -821,6 +821,19 @@ async def update_reference_index_project(
         .where(ReferenceLine.regel_type == REFERENCE_INDEX_TYPE)
     ).all()
     if not lines:
+        line_ids = [
+            _int_or_none(str(value))
+            for value in form.getlist("line_ids")
+            if _int_or_none(str(value)) is not None
+        ]
+        if line_ids:
+            lines = session.scalars(
+                select(ReferenceLine)
+                .where(ReferenceLine.dataset_id == dataset_id)
+                .where(ReferenceLine.id.in_(line_ids))
+                .where(ReferenceLine.regel_type == REFERENCE_INDEX_TYPE)
+            ).all()
+    if not lines:
         raise HTTPException(status_code=404, detail="Kengetalproject niet gevonden.")
 
     section = str(form.get("section", "") or lines[0].hoofdstuk_omschrijving or "Overig").strip()
@@ -1887,26 +1900,44 @@ def _reference_index_sections(session: Session, query: str | None, limit: int = 
         section = (line.hoofdstuk_omschrijving or "Overig").strip() or "Overig"
         if section not in section_order:
             section_order[section] = len(section_order)
-        row_marker = line.source_row or line.line_number
+        raw_meta = _reference_raw_meta(line.raw_text)
+        source_row = line.source_row or _int_or_none(raw_meta.get("rij"))
+        phase = line.phase or raw_meta.get("fase") or ""
+        period = line.period or raw_meta.get("periode") or ""
+        bdb_indexering = line.bdb_indexering if line.bdb_indexering is not None else line.norm_arbeid
+        source_key = (
+            source_row
+            if source_row is not None
+            else (
+                line.project_name or "",
+                line.relation_name or "",
+                line.document_date.strftime("%Y-%m-%d") if line.document_date else "",
+                phase,
+                period,
+                str(bdb_indexering or ""),
+            )
+        )
         key = (
             line.dataset_id,
             section,
-            row_marker,
+            source_key,
             line.project_name or "",
             line.relation_name or "",
         )
         if key not in grouped:
+            modal_key = str(source_row or abs(hash(key))).replace("-", "m")
             grouped[key] = {
                 "dataset_id": line.dataset_id,
                 "dataset_name": line.dataset.name,
                 "source_filename": line.dataset.original_filename or "",
                 "section": section,
-                "source_row": row_marker,
+                "source_row": source_row or line.line_number,
+                "source_row_label": source_row or "",
                 "project_name": line.project_name or "",
                 "variant": line.relation_name or "",
-                "phase": line.phase or "",
-                "period": line.period or "",
-                "bdb_indexering": line.bdb_indexering,
+                "phase": phase,
+                "period": period,
+                "bdb_indexering": bdb_indexering,
                 "project_sheet_name": line.project_sheet_name or "",
                 "document_date": line.document_date,
                 "date_input": line.document_date.strftime("%Y-%m-%d") if line.document_date else "",
@@ -1915,7 +1946,7 @@ def _reference_index_sections(session: Session, query: str | None, limit: int = 
                 "category_ids": {},
                 "category_count": 0,
                 "total": Decimal("0"),
-                "modal_id": f"kengetal-{line.dataset_id}-{row_marker}",
+                "modal_id": f"kengetal-{line.dataset_id}-{modal_key}",
             }
         row_data = grouped[key]
         value = line.eenheidsprijs if line.eenheidsprijs is not None else line.totaal_prijs_per_regel
@@ -1924,12 +1955,12 @@ def _reference_index_sections(session: Session, query: str | None, limit: int = 
         row_data["category_count"] = int(row_data["category_count"]) + 1
         if value is not None:
             row_data["total"] = Decimal(str(row_data["total"])) + Decimal(str(value))
-        if not row_data["phase"] and line.phase:
-            row_data["phase"] = line.phase
-        if not row_data["period"] and line.period:
-            row_data["period"] = line.period
-        if row_data["bdb_indexering"] is None and line.bdb_indexering is not None:
-            row_data["bdb_indexering"] = line.bdb_indexering
+        if not row_data["phase"] and phase:
+            row_data["phase"] = phase
+        if not row_data["period"] and period:
+            row_data["period"] = period
+        if row_data["bdb_indexering"] is None and bdb_indexering is not None:
+            row_data["bdb_indexering"] = bdb_indexering
         if not row_data["project_sheet_name"] and line.project_sheet_name:
             row_data["project_sheet_name"] = line.project_sheet_name
 
@@ -1961,9 +1992,8 @@ def _reference_index_sections(session: Session, query: str | None, limit: int = 
 def _reference_index_summary(session: Session, sections: list[dict[str, object]]) -> dict[str, object]:
     project_count = sum(int(section["row_count"]) for section in sections)
     category_line_count = sum(int(section["category_count"]) for section in sections)
-    latest_index = session.scalars(
-        select(PriceIndexValue).order_by(PriceIndexValue.effective_date.desc()).limit(1)
-    ).first()
+    latest_index = session.scalars(select(PriceIndexValue).order_by(PriceIndexValue.effective_date.desc()).limit(1)).first()
+    index_values = session.scalars(select(PriceIndexValue).order_by(PriceIndexValue.effective_date.desc()).limit(8)).all()
     index_label = ""
     index_value = None
     if latest_index is not None:
@@ -1975,7 +2005,27 @@ def _reference_index_summary(session: Session, sections: list[dict[str, object]]
         "section_count": len(sections),
         "latest_index_label": index_label,
         "latest_index_value": index_value,
+        "index_values": [
+            {
+                "period": value.notes or value.effective_date.strftime("%Y-%m"),
+                "value": value.index_value,
+            }
+            for value in index_values
+        ],
     }
+
+
+def _reference_raw_meta(raw_text: str | None) -> dict[str, str]:
+    meta: dict[str, str] = {}
+    for part in (raw_text or "").split("|"):
+        if ":" not in part:
+            continue
+        key, value = part.split(":", 1)
+        key = key.strip().lower()
+        value = value.strip()
+        if key in {"rij", "fase", "periode", "categorie"} and value:
+            meta[key] = value
+    return meta
 
 
 def _normalization_candidate_lines(session: Session, limit: int = 120) -> list[BudgetLine]:
