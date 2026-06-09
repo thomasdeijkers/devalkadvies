@@ -1192,6 +1192,7 @@ textarea {
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
+  background: #163b55;
   scrollbar-gutter: stable;
 }
 
@@ -1213,7 +1214,7 @@ textarea {
   min-height: 36px;
   padding: 4px 8px;
   border-top: 1px solid rgba(126, 169, 219, 0.14);
-  background: rgba(255, 255, 255, 0.018);
+  background: #183d5a;
 }
 
 .kengetal-index-head {
@@ -1240,7 +1241,7 @@ textarea {
   align-self: stretch;
   display: flex;
   align-items: center;
-  background: rgba(180, 233, 202, 0.16);
+  background: rgba(180, 233, 202, 0.18);
 }
 
 .kengetal-index-head .col-index-meta {
@@ -1339,11 +1340,16 @@ textarea {
 
 .index-add-panel {
   align-self: start;
+  padding: 16px;
+}
+
+.index-add-panel h3 {
+  margin-bottom: 10px;
 }
 
 .index-value-form {
   display: grid;
-  grid-template-columns: minmax(150px, 220px) minmax(120px, 160px) minmax(260px, 1fr) 150px;
+  grid-template-columns: 180px 140px minmax(360px, 1fr) 130px;
   gap: 10px;
   align-items: center;
 }
@@ -1356,6 +1362,7 @@ textarea {
 .index-formula-panel,
 .index-sheet-panel {
   align-self: start;
+  padding: 16px;
 }
 
 .formula-card {
@@ -1449,18 +1456,18 @@ textarea {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 7px;
-  width: min(860px, 100%);
+  width: 100%;
 }
 
 .compact-index-values-head,
 .compact-index-values-row {
   display: grid;
-  grid-template-columns: minmax(140px, 190px) 120px minmax(260px, 1fr);
+  grid-template-columns: 180px 140px minmax(420px, 1fr);
   align-items: center;
-  min-height: 38px;
-  padding: 0 10px;
+  min-height: 42px;
+  padding: 0 12px;
   border-top: 1px solid rgba(126, 169, 219, 0.14);
-  column-gap: 10px;
+  column-gap: 14px;
 }
 
 .compact-index-values-head {
@@ -1486,10 +1493,11 @@ textarea {
 }
 
 .compact-index-values-row span:nth-child(3) {
-  overflow: hidden;
+  overflow: visible;
   color: var(--muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .kengetal-section {
@@ -1509,7 +1517,7 @@ textarea {
   border-top: 1px solid var(--line);
   border-bottom: 1px solid rgba(126, 169, 219, 0.18);
   color: #fff;
-  background: linear-gradient(90deg, #173d57, #204b63);
+  background: #1c5067;
   cursor: pointer;
   list-style: none;
 }
@@ -2859,7 +2867,6 @@ pre {
   .kengetal-summary-strip,
   .index-sheet-layout,
   .index-simple-layout,
-  .index-value-form,
   .data-grid,
   .input-overview,
   .consult-form,
@@ -2882,6 +2889,7 @@ pre {
   .kengetal-upload-row,
   .kengetal-project-form,
   .kengetal-category-editor,
+  .index-value-form,
   .meta-form {
     display: grid;
     grid-template-columns: 1fr;
