@@ -1978,7 +1978,8 @@ def _reference_index_sections(session: Session, query: str | None, limit: int = 
         source_row = line.source_row or _int_or_none(raw_meta.get("rij"))
         phase = line.phase or raw_meta.get("fase") or ""
         period = line.period or raw_meta.get("periode") or ""
-        bdb_indexering = line.bdb_indexering if line.bdb_indexering is not None else line.norm_arbeid
+        stored_bdb_indexering = line.bdb_indexering if line.bdb_indexering is not None else line.norm_arbeid
+        bdb_indexering = _calculated_bdb_indexering(index_lookup, period, stored_bdb_indexering)
         key = (
             line.dataset_id,
             section,
@@ -2108,6 +2109,23 @@ def _price_index_lookup(session: Session) -> dict[str, PriceIndexValue]:
 
 def _period_key(value: str | None) -> str:
     return re.sub(r"[^0-9q]+", "", (value or "").lower())
+
+
+def _calculated_bdb_indexering(
+    index_lookup: dict[str, PriceIndexValue],
+    period: str | None,
+    stored_bdb_indexering: Decimal | None,
+) -> Decimal | None:
+    index_value = index_lookup.get(_period_key(period))
+    latest_index = index_lookup.get("__latest__")
+    if index_value is None or latest_index is None or not index_value.index_value:
+        return stored_bdb_indexering
+    try:
+        return (
+            Decimal(str(latest_index.index_value)) / Decimal(str(index_value.index_value))
+        ).quantize(Decimal("0.0001"))
+    except (InvalidOperation, ZeroDivisionError):
+        return stored_bdb_indexering
 
 
 def _reference_index_reference(

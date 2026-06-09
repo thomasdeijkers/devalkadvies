@@ -1192,7 +1192,7 @@ textarea {
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #183d5a;
+  background: #1c5067;
   scrollbar-gutter: stable;
 }
 
@@ -1215,6 +1215,14 @@ textarea {
   padding: 4px 8px;
   border-top: 1px solid rgba(126, 169, 219, 0.14);
   background: #183d5a;
+}
+
+.kengetal-section:not([open]) {
+  background: #1c5067;
+}
+
+.kengetal-section:not([open]) summary {
+  box-shadow: 100vw 0 0 #1c5067;
 }
 
 .kengetal-index-head {
