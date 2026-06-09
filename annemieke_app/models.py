@@ -273,6 +273,7 @@ class PriceIndexValue(Base):
     effective_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     index_value: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_reference: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     series: Mapped["PriceIndexSeries"] = relationship(back_populates="values")

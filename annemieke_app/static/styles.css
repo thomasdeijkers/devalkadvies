@@ -1119,10 +1119,10 @@ textarea {
 
 .kengetal-index-row {
   display: grid;
-  grid-template-columns: 270px 128px 154px 104px 92px 88px 214px repeat(17, 118px) 280px 80px;
+  grid-template-columns: 300px 120px 140px 100px 92px 86px repeat(17, 116px) 76px 76px 76px;
   column-gap: 8px;
   align-items: center;
-  min-width: 3424px;
+  min-width: 3210px;
   min-height: 36px;
   padding: 4px 8px;
   border-top: 1px solid rgba(126, 169, 219, 0.14);
@@ -1154,6 +1154,13 @@ textarea {
   text-align: left;
 }
 
+.kengetal-index-head span:nth-last-child(-n + 3),
+.button-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .kengetal-project-cell strong,
 .kengetal-project-cell small {
   display: block;
@@ -1177,13 +1184,63 @@ textarea {
   font-size: 10px;
 }
 
+.compact-source-button {
+  width: 64px;
+  min-height: 24px;
+  padding: 0 8px;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.muted-button,
+.muted-button:hover {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .source-cell {
   color: var(--muted);
   font-size: 10px;
 }
 
+.compact-index-values {
+  display: grid;
+  gap: 0;
+  margin-top: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.compact-index-values-head,
+.compact-index-values-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 90px 82px;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 10px;
+  border-top: 1px solid rgba(126, 169, 219, 0.14);
+  column-gap: 10px;
+}
+
+.compact-index-values-head {
+  min-height: 36px;
+  border-top: 0;
+  background: rgba(255, 255, 255, 0.06);
+  color: #d9e8fa;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.compact-index-values-row span:nth-child(2) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .kengetal-section {
-  min-width: 3424px;
+  min-width: 3210px;
 }
 
 .kengetal-section summary {

@@ -285,6 +285,11 @@ def _render_workspace(
         select(Relation).order_by(Relation.name)
     ).all()
     index_series = session.scalars(select(PriceIndexSeries).order_by(PriceIndexSeries.name)).all()
+    index_values = (
+        session.scalars(select(PriceIndexValue).order_by(PriceIndexValue.effective_date.desc()).limit(80)).all()
+        if active_page == "indices"
+        else []
+    )
     scheduled_jobs = session.scalars(select(ScheduledJob).order_by(ScheduledJob.created_at.desc())).all()
     reference_datasets = session.scalars(
         select(ReferenceDataset).order_by(ReferenceDataset.created_at.desc()).limit(20)
@@ -327,6 +332,7 @@ def _render_workspace(
             "project_options": project_options,
             "relation_options": relation_options,
             "index_series": index_series,
+            "index_values": index_values,
             "scheduled_jobs": scheduled_jobs,
             "reference_datasets": reference_datasets,
             "reference_lines": reference_lines,
@@ -2043,9 +2049,9 @@ def _reference_index_reference(
     index_value = index_lookup.get(_period_key(period))
     parts: list[str] = []
     if index_value is not None:
-        parts.append(f"INDEXEN {index_value.notes or period}: {amount(index_value.index_value)}")
-    elif period:
-        parts.append(f"INDEXEN {period}: niet geladen")
+        parts.append(f"{index_value.notes or period}: {amount(index_value.index_value)}")
+        if index_value.source_reference:
+            parts.append(index_value.source_reference)
     if bdb_indexering is not None:
         parts.append(f"BDB factor {amount(bdb_indexering)}")
     return " | ".join(parts)

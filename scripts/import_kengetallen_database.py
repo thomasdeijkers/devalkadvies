@@ -41,6 +41,8 @@ from annemieke_app.normalizer import apply_normalization, is_noise_line  # noqa:
 
 
 DEFAULT_SOURCE_DIR = ROOT / "Hulp bestanden" / "Kengetallen"
+PRICE_INDEX_SERIES_NAME = "Nieuwbouwwoningen outputprijsindex bouwkosten"
+PRICE_INDEX_SOURCE = "CBS Prijsindex bouwkosten excl. BTW | Index"
 SUMMARY_LABELS = {"laag", "gemiddeld", "hoog"}
 META_HEADERS = {"fase", "peildatum", "periode", "bdb indexering"}
 CATEGORY_HEADERS = {
@@ -232,15 +234,14 @@ def _import_price_index_values(session, path: Path) -> int:
     if not header_row:
         return 0
 
-    series = session.scalar(
-        select(PriceIndexSeries).where(PriceIndexSeries.name == "Nieuwbouwwoningen outputprijsindex bouwkosten")
-    )
+    series = session.scalar(select(PriceIndexSeries).where(PriceIndexSeries.name == PRICE_INDEX_SERIES_NAME))
     if series is None:
-        series = PriceIndexSeries(name="Nieuwbouwwoningen outputprijsindex bouwkosten")
+        series = PriceIndexSeries(name=PRICE_INDEX_SERIES_NAME)
         session.add(series)
         session.flush()
-    series.description = "CBS Prijsindex bouwkosten excl. BTW, ingeladen uit het DeValk kengetallenbestand."
-    series.source = path.name
+    source_text = _index_sheet_source_text(sheet, header_row)
+    series.description = source_text or "CBS Prijsindex bouwkosten excl. BTW, ingeladen uit het DeValk kengetallenbestand."
+    series.source = f"{path.name} > {sheet.title}"
     series.provider = "excel"
     series.period_field = "Periode"
     series.value_field = "Index"
@@ -261,10 +262,21 @@ def _import_price_index_values(session, path: Path) -> int:
                 effective_date=effective_date,
                 index_value=index_value,
                 notes=period,
+                source_reference=f"{path.name} > {sheet.title} rij {row} | {PRICE_INDEX_SOURCE}",
             )
         )
         count += 1
     return count
+
+
+def _index_sheet_source_text(sheet: Worksheet, header_row: int) -> str:
+    values: list[str] = []
+    for row in range(1, max(header_row, 1)):
+        for column in range(1, min(sheet.max_column, 10) + 1):
+            text = _text(sheet.cell(row=row, column=column).value)
+            if text and _key(text) not in {"periode", "index"}:
+                values.append(text)
+    return " | ".join(dict.fromkeys(values))
 
 
 def _generic_reference_lines(path: Path, dataset: ReferenceDataset) -> list[ReferenceLine]:

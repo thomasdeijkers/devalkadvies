@@ -175,10 +175,10 @@
         <span>Peildatum</span>
         <span>Periode</span>
         <span>BDB-index</span>
-        <span>Index bron</span>
         {% for category_key, category_label in reference_category_columns %}
           <span>{{ category_label }}</span>
         {% endfor %}
+        <span>Index</span>
         <span>Bron</span>
         <span>Actie</span>
       </div>
@@ -199,13 +199,21 @@
               <span>{{ row.date_label or "-" }}</span>
               <span>{{ row.period or "-" }}</span>
               <span>{{ row.bdb_indexering|amount if row.bdb_indexering else "-" }}</span>
-              <span class="index-reference-cell">{{ row.index_reference or "-" }}</span>
               {% for category_key, category_label in reference_category_columns %}
                 {% set value = row.categories.get(category_key) %}
                 <span class="numeric-cell">{{ value|euro if value is not none else "-" }}</span>
               {% endfor %}
-              <span class="source-cell">{{ row.source_filename or row.dataset_name }}{% if row.project_sheet_name %} · {{ row.project_sheet_name }}{% endif %}{% if row.source_row_label %} · rij {{ row.source_row_label }}{% endif %}</span>
-              <span><a class="mini-button" href="#{{ row.modal_id }}">Openen</a></span>
+              <span class="button-cell">
+                {% if row.index_reference %}
+                  <button class="mini-button compact-source-button" type="button" title="{{ row.index_reference }}">Index</button>
+                {% else %}
+                  <button class="mini-button compact-source-button muted-button" type="button" disabled>Index</button>
+                {% endif %}
+              </span>
+              <span class="button-cell">
+                <a class="mini-button compact-source-button" href="#{{ row.modal_id }}" title="{{ row.source_filename or row.dataset_name }}{% if row.project_sheet_name %} · {{ row.project_sheet_name }}{% endif %}{% if row.source_row_label %} · rij {{ row.source_row_label }}{% endif %}">Bron</a>
+              </span>
+              <span class="button-cell"><a class="mini-button compact-source-button" href="#{{ row.modal_id }}">Open</a></span>
             </div>
             <div id="{{ row.modal_id }}" class="modal-card">
               <a class="modal-backdrop" href="#kengetal-index" aria-label="Sluiten"></a>
@@ -794,6 +802,28 @@
           </article>
         {% else %}
           <p class="muted">Nog geen indexreeksen toegevoegd.</p>
+        {% endfor %}
+      </div>
+      <div class="compact-index-values">
+        <div class="compact-index-values-head">
+          <span>Periode</span>
+          <span>Index</span>
+          <span>Bron</span>
+        </div>
+        {% for value in index_values %}
+          <div class="compact-index-values-row">
+            <span>{{ value.notes or value.effective_date.strftime("%Y-%m") }}</span>
+            <span>{{ value.index_value|amount }}</span>
+            <span class="button-cell">
+              {% if value.source_reference %}
+                <button class="mini-button compact-source-button" type="button" title="{{ value.source_reference }}">Bron</button>
+              {% else %}
+                <button class="mini-button compact-source-button muted-button" type="button" disabled>Bron</button>
+              {% endif %}
+            </span>
+          </div>
+        {% else %}
+          <p class="muted">Nog geen indexwaarden geladen uit het INDEXEN-blad.</p>
         {% endfor %}
       </div>
     </article>

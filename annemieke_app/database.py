@@ -122,6 +122,16 @@ def _apply_lightweight_migrations() -> None:
                 with engine.begin() as connection:
                     connection.execute(text(statement))
 
+    if "price_index_values" in inspector.get_table_names():
+        value_columns = {column["name"] for column in inspector.get_columns("price_index_values")}
+        value_migrations = {
+            "source_reference": "ALTER TABLE price_index_values ADD COLUMN source_reference TEXT",
+        }
+        for column_name, statement in value_migrations.items():
+            if column_name not in value_columns:
+                with engine.begin() as connection:
+                    connection.execute(text(statement))
+
     if "assessment_templates" in inspector.get_table_names():
         template_columns = {column["name"] for column in inspector.get_columns("assessment_templates")}
         template_migrations = {
