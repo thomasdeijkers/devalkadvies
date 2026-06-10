@@ -210,14 +210,28 @@
                 {% set value_source = row.category_sources.get(category_key) %}
                 <span class="numeric-cell col-price">
                   {% if value is not none %}
-                    <a class="kengetal-value-link" href="#{{ row.modal_id }}" title="{{ value_source or category_label }}">{{ value|euro }}</a>
+                    <a
+                      class="kengetal-value-link kengetal-focus-link"
+                      href="#{{ row.modal_id }}"
+                      title="{{ value_source or category_label }}"
+                      data-modal-id="{{ row.modal_id }}"
+                      data-field="{{ category_key }}"
+                      data-preview-src="/kengetallen/{{ row.dataset_id }}/sheet-preview?sheet={{ row.project_sheet_name|urlencode }}&row={{ row.source_row }}&field={{ category_key|urlencode }}"
+                    >{{ value|euro }}</a>
                   {% else %}
                     -
                   {% endif %}
                 </span>
               {% endfor %}
               <span class="button-cell col-action">
-                <a class="mini-button compact-source-button" href="#{{ row.modal_id }}" title="{{ row.source_filename or row.dataset_name }}{% if row.project_sheet_name %} · {{ row.project_sheet_name }}{% endif %}{% if row.source_row_label %} · rij {{ row.source_row_label }}{% endif %}{% if row.index_reference %} · {{ row.index_reference }}{% endif %}">Open</a>
+                <a
+                  class="mini-button compact-source-button kengetal-focus-link"
+                  href="#{{ row.modal_id }}"
+                  title="{{ row.source_filename or row.dataset_name }}{% if row.project_sheet_name %} · {{ row.project_sheet_name }}{% endif %}{% if row.source_row_label %} · rij {{ row.source_row_label }}{% endif %}{% if row.index_reference %} · {{ row.index_reference }}{% endif %}"
+                  data-modal-id="{{ row.modal_id }}"
+                  data-field="{{ row.active_category_key }}"
+                  data-preview-src="/kengetallen/{{ row.dataset_id }}/sheet-preview?sheet={{ row.project_sheet_name|urlencode }}&row={{ row.source_row }}&field={{ row.active_category_key|urlencode }}"
+                >Open</a>
                 {% if row.project_sheet_name %}
                   <a class="mini-button compact-source-button" href="/kengetallen/{{ row.dataset_id }}/sheet-pdf?sheet={{ row.project_sheet_name|urlencode }}" target="_blank" rel="noopener">Bijlage</a>
                 {% endif %}
@@ -243,7 +257,7 @@
                         <span>{{ row.project_sheet_name }}</span>
                         <a class="mini-button" href="/kengetallen/{{ row.dataset_id }}/sheet-pdf?sheet={{ row.project_sheet_name|urlencode }}" target="_blank" rel="noopener">Bijlage</a>
                       </div>
-                      <iframe title="Bronbegroting {{ row.project_sheet_name }}" src="/kengetallen/{{ row.dataset_id }}/sheet-preview?sheet={{ row.project_sheet_name|urlencode }}&row={{ row.source_row }}&field={{ row.active_category_key|urlencode }}"></iframe>
+                      <iframe data-kengetal-preview title="Bronbegroting {{ row.project_sheet_name }}" src="/kengetallen/{{ row.dataset_id }}/sheet-preview?sheet={{ row.project_sheet_name|urlencode }}&row={{ row.source_row }}&field={{ row.active_category_key|urlencode }}"></iframe>
                     </div>
                   {% endif %}
                   <label>Project<input name="project_name" value="{{ row.project_name }}"></label>
@@ -258,7 +272,7 @@
                       {% set value = row.categories.get(category_key) %}
                       {% set value_source = row.category_sources.get(category_key) %}
                       {% set safe_key = category_key|replace(" ", "_") %}
-                      <label class="{% if category_key == row.active_category_key %}is-referenced-field{% endif %}">
+                      <label data-reference-field="{{ category_key }}" class="{% if category_key == row.active_category_key %}is-referenced-field{% endif %}">
                         <span>{{ category_label }}</span>
                         {% if value_source %}<small>{{ value_source }}</small>{% endif %}
                         <input name="cat_{{ safe_key }}" value="{{ value|amount if value is not none else '' }}">
@@ -1080,6 +1094,26 @@
   </div>
 {% endfor %}
 {% endif %}
+
+<script>
+  document.addEventListener("click", (event) => {
+    const trigger = event.target.closest(".kengetal-focus-link");
+    if (!trigger) return;
+    const modalId = trigger.dataset.modalId;
+    const field = trigger.dataset.field;
+    const previewSrc = trigger.dataset.previewSrc;
+    if (!modalId || !field) return;
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    modal.querySelectorAll("[data-reference-field]").forEach((item) => {
+      item.classList.toggle("is-referenced-field", item.dataset.referenceField === field);
+    });
+    const iframe = modal.querySelector("[data-kengetal-preview]");
+    if (iframe && previewSrc) {
+      iframe.src = previewSrc;
+    }
+  });
+</script>
 
 {% if active_page == "projects" %}
 {% for project in projects %}

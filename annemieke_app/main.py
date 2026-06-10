@@ -828,7 +828,7 @@ def reference_sheet_preview(
     ).all()
     if source_lines:
         def source_money(value: object) -> str:
-            return "-" if value in (None, "") else escape(_euro(value))
+            return "-" if value in (None, "") else escape(euro(value))
 
         def source_meta_value(raw_text: str | None, name: str) -> str:
             for part in (raw_text or "").split("|"):
@@ -999,7 +999,7 @@ def reference_sheet_attachment(
         return ""
 
     def source_money(value: object) -> str:
-        return "-" if value in (None, "") else escape(_euro(value))
+        return "-" if value in (None, "") else escape(euro(value))
 
     priced_lines = [
         line
