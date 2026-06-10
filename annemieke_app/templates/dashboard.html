@@ -221,7 +221,7 @@
                     >
                       <strong>{{ value|euro }}</strong>
                       {% if original_value is not none %}
-                        <small>Origineel {{ original_value|euro }}</small>
+                        <small>{{ original_value|euro }} · index {{ row.bdb_indexering|amount if row.bdb_indexering else "-" }}</small>
                       {% endif %}
                     </a>
                   {% else %}
@@ -282,13 +282,12 @@
                       {% set safe_key = category_key|replace(" ", "_") %}
                       <label data-reference-field="{{ category_key }}" class="{% if category_key == row.active_category_key %}is-referenced-field{% endif %}">
                         <span>{{ category_label }}</span>
-                        {% if value_source %}<small>{{ value_source }}</small>{% endif %}
                         <input name="cat_{{ safe_key }}" value="{{ value|amount if value is not none else '' }}">
                         <em class="kengetal-price-pair">
-                          <span>Origineel: {% if original_value is not none %}{{ original_value|euro }}{% else %}-{% endif %}</span>
-                          <span>Geïndexeerd: {% if value is not none %}{{ value|euro }}{% else %}-{% endif %}</span>
+                          <span title="Originele bronprijs">{% if original_value is not none %}{{ original_value|euro }}{% else %}-{% endif %}</span>
+                          <span title="BDB-index">index {{ row.bdb_indexering|amount if row.bdb_indexering else "-" }}</span>
+                          <span title="Geïndexeerde prijs">{% if value is not none %}{{ value|euro }}{% else %}-{% endif %}</span>
                         </em>
-                        {% if original_source %}<small>{{ original_source }}</small>{% endif %}
                       </label>
                     {% endfor %}
                   </div>
