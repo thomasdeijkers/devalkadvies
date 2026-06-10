@@ -45,6 +45,9 @@ PRICE_INDEX_SERIES_NAME = "Nieuwbouwwoningen outputprijsindex bouwkosten"
 PRICE_INDEX_SOURCE = "CBS Prijsindex bouwkosten excl. BTW | Index"
 SUMMARY_LABELS = {"laag", "gemiddeld", "hoog"}
 META_HEADERS = {"fase", "peildatum", "periode", "bdb indexering"}
+REFERENCE_INDEX_TYPE = "kengetal_index"
+REFERENCE_PROJECT_SHEET_TYPE = "kengetal_bronregel"
+EXCLUDED_PROJECT_SHEETS = {"indexen", "vormfactoren", "kengetallen geindexeerd", "kengetallen geïndexeerd"}
 CATEGORY_HEADERS = {
     "algemeen": "Algemeen",
     "sloopwerk": "Sloopwerk",
@@ -103,7 +106,9 @@ def import_file(session, path: Path) -> int:
     session.flush()
 
     lines = _kengetallen_index_lines(path, dataset)
-    if not lines:
+    if lines:
+        lines.extend(_project_sheet_source_lines(path, dataset, start_line_number=len(lines) + 1))
+    else:
         lines = _generic_reference_lines(path, dataset)
     for line in lines:
         session.add(line)
@@ -183,7 +188,7 @@ def _kengetallen_index_lines(path: Path, dataset: ReferenceDataset) -> list[Refe
                     ReferenceLine(
                         dataset_id=dataset.id,
                         line_number=len(lines) + 1,
-                        regel_type="kengetal_index",
+                        regel_type=REFERENCE_INDEX_TYPE,
                         niveau=0,
                         hoofdstuk_code=category_key,
                         hoofdstuk_omschrijving=block["section"],
@@ -279,6 +284,150 @@ def _index_sheet_source_text(sheet: Worksheet, header_row: int) -> str:
     return " | ".join(dict.fromkeys(values))
 
 
+def _project_sheet_source_lines(
+    path: Path,
+    dataset: ReferenceDataset,
+    start_line_number: int = 1,
+) -> list[ReferenceLine]:
+    workbook = load_workbook(path, data_only=True, keep_vba=path.suffix.lower() == ".xlsm")
+    sheet_metadata = _index_metadata_by_sheet(workbook)
+    lines: list[ReferenceLine] = []
+    try:
+        for sheet in workbook.worksheets:
+            if sheet.sheet_state != "visible" or _key(sheet.title) in EXCLUDED_PROJECT_SHEETS:
+                continue
+            header = _project_sheet_header(sheet)
+            if not header:
+                continue
+            metadata = sheet_metadata.get(sheet.title, {})
+            current_section = ""
+            for row in range(header["row"] + 1, sheet.max_row + 1):
+                description = _text(_cell(sheet, row, header.get("description")))
+                code = _text(_cell(sheet, row, header.get("code")))
+                if not description:
+                    continue
+                quantity = _decimal(_cell(sheet, row, header.get("quantity")))
+                unit = _text(_cell(sheet, row, header.get("unit"))) or None
+                unit_price = _decimal(_cell(sheet, row, header.get("unit_price")))
+                total_price = _decimal(_cell(sheet, row, header.get("total_price")))
+                m2bvo_price = _decimal(_cell(sheet, row, header.get("m2bvo_price")))
+                if total_price is None and unit_price is not None and quantity not in (None, Decimal("0")):
+                    total_price = unit_price * quantity
+                if unit_price is None and total_price is not None and quantity not in (None, Decimal("0")):
+                    try:
+                        unit_price = total_price / quantity
+                    except (InvalidOperation, ZeroDivisionError):
+                        unit_price = None
+                if not any([quantity, unit, unit_price, total_price, m2bvo_price]):
+                    clean_description = description.strip(" -")
+                    if clean_description and len(clean_description) <= 90:
+                        current_section = clean_description
+                source_text = f"{path.name}|{sheet.title}|rij:{row}|bronregel"
+                if m2bvo_price is not None:
+                    source_text = f"{source_text}|m2bvo:{m2bvo_price}"
+                lines.append(
+                    ReferenceLine(
+                        dataset_id=dataset.id,
+                        line_number=start_line_number + len(lines),
+                        regel_type=REFERENCE_PROJECT_SHEET_TYPE,
+                        niveau=0,
+                        hoofdstuk_code=code or None,
+                        hoofdstuk_omschrijving=current_section or None,
+                        post_code=code or None,
+                        project_name=metadata.get("project_name") or _project_title_from_sheet(sheet),
+                        relation_name=metadata.get("variant"),
+                        document_date=metadata.get("document_date"),
+                        phase=metadata.get("phase"),
+                        period=metadata.get("period"),
+                        bdb_indexering=metadata.get("bdb_indexering"),
+                        project_sheet_name=sheet.title,
+                        source_row=row,
+                        omschrijving_werkzaamheden=description,
+                        hoeveelheid=quantity,
+                        eenheid=unit,
+                        totaal_prijs_per_regel=total_price,
+                        eenheidsprijs=unit_price,
+                        bron_pagina=None,
+                        confidence=100 if unit_price is not None or total_price is not None else 70,
+                        raw_text=source_text,
+                    )
+                )
+    finally:
+        workbook.close()
+    return lines
+
+
+def _index_metadata_by_sheet(workbook) -> dict[str, dict[str, Any]]:
+    sheet = _find_index_sheet(workbook.worksheets)
+    if sheet is None:
+        return {}
+    metadata: dict[str, dict[str, Any]] = {}
+    blocks = _find_header_blocks(sheet)
+    for block_index, block in enumerate(blocks):
+        next_row = blocks[block_index + 1]["row"] if block_index + 1 < len(blocks) else sheet.max_row + 1
+        project_column = block["project_column"]
+        variant_column = project_column + 1
+        for row in range(block["row"] + 1, next_row):
+            project_name = _text(sheet.cell(row=row, column=project_column).value)
+            if not project_name or project_name.lower() in SUMMARY_LABELS:
+                continue
+            variant = _text(sheet.cell(row=row, column=variant_column).value) or None
+            project_sheet_name = _match_project_sheet(workbook.worksheets, project_name, variant)
+            if not project_sheet_name or project_sheet_name in metadata:
+                continue
+            metadata[project_sheet_name] = {
+                "project_name": project_name,
+                "variant": variant,
+                "phase": _text(_cell(sheet, row, block["columns"].get("fase"))) or None,
+                "period": _text(_cell(sheet, row, block["columns"].get("periode"))) or None,
+                "document_date": _date(_cell(sheet, row, block["columns"].get("peildatum"))),
+                "bdb_indexering": _decimal(_cell(sheet, row, block["columns"].get("bdb indexering"))),
+            }
+    return metadata
+
+
+def _project_sheet_header(sheet: Worksheet) -> dict[str, int] | None:
+    for row in range(1, min(sheet.max_row, 120) + 1):
+        columns: dict[str, int] = {}
+        for column in range(1, min(sheet.max_column, 14) + 1):
+            token = _header_token(sheet.cell(row=row, column=column).value)
+            if token in {"code", "codering"}:
+                columns["code"] = column
+            elif token in {"onderdeel", "omschrijving"}:
+                columns["description"] = column
+            elif token in {"hheid", "hvheid", "hvh"}:
+                columns["quantity"] = column
+            elif token in {"eheid", "ehd", "eenheid"}:
+                columns["unit"] = column
+            elif token in {"euroeenheid", "eureenheid", "eenheidsprijs"}:
+                columns["unit_price"] = column
+            elif token in {"eurototaal", "eurtotaal", "totaal"}:
+                columns["total_price"] = column
+            elif token in {"eurom2bvo", "eurm2bvo", "m2bvo"}:
+                columns["m2bvo_price"] = column
+        if "description" in columns and ("unit_price" in columns or "total_price" in columns or "m2bvo_price" in columns):
+            columns["row"] = row
+            columns.setdefault("code", max(1, columns["description"] - 1))
+            return columns
+    return None
+
+
+def _project_title_from_sheet(sheet: Worksheet) -> str:
+    for row in range(1, min(sheet.max_row, 12) + 1):
+        values = [_text(sheet.cell(row=row, column=column).value) for column in range(1, min(sheet.max_column, 10) + 1)]
+        line = " ".join(value for value in values if value)
+        match = re.search(r"Project\s*&\s*Locatie\s*:?\s*(.+)", line, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+    return sheet.title
+
+
+def _header_token(value: Any) -> str:
+    text = _text(value).lower()
+    text = text.replace("€", "euro").replace("/", "").replace("-", "")
+    return re.sub(r"[^a-z0-9]+", "", text)
+
+
 def _generic_reference_lines(path: Path, dataset: ReferenceDataset) -> list[ReferenceLine]:
     imported_lines = import_reference_lines(path)
     lines: list[ReferenceLine] = []
@@ -332,7 +481,7 @@ def _match_project_sheet(sheets: list[Worksheet], project_name: str, variant: st
     candidates = [
         sheet
         for sheet in sheets
-        if _key(sheet.title) not in {"indexen", "vormfactoren", "kengetallen geindexeerd", "kengetallen geïndexeerd"}
+        if _key(sheet.title) not in EXCLUDED_PROJECT_SHEETS
     ]
     project_key = _compact_key(project_name)
     variant_key = _compact_key(variant or "")

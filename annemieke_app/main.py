@@ -56,6 +56,7 @@ MONEY_TEXT_PATTERN = re.compile(
     r"(?:€\s*)?-?(?:\d{1,3}(?:[.\s]\d{3})+(?:,\d{2})?|\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d+(?:[.,]\d{2}))"
 )
 REFERENCE_INDEX_TYPE = "kengetal_index"
+REFERENCE_PROJECT_SHEET_TYPE = "kengetal_bronregel"
 REFERENCE_CATEGORY_COLUMNS: list[tuple[str, str]] = [
     ("algemeen", "Algemeen"),
     ("sloopwerk", "Sloopwerk"),
@@ -814,11 +815,98 @@ def reference_sheet_preview(
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     dataset = session.get(ReferenceDataset, dataset_id)
-    if dataset is None or not dataset.stored_filename:
+    if dataset is None:
         raise HTTPException(status_code=404, detail="Bronbestand niet gevonden.")
-    file_path = settings.upload_dir / dataset.stored_filename
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Bronbestand niet gevonden.")
+    source_lines = session.scalars(
+        select(ReferenceLine)
+        .where(ReferenceLine.dataset_id == dataset_id)
+        .where(ReferenceLine.project_sheet_name == sheet)
+        .where(ReferenceLine.regel_type == REFERENCE_PROJECT_SHEET_TYPE)
+        .order_by(ReferenceLine.source_row, ReferenceLine.line_number)
+    ).all()
+    if source_lines:
+        index_line = session.scalars(
+            select(ReferenceLine)
+            .where(ReferenceLine.dataset_id == dataset_id)
+            .where(ReferenceLine.project_sheet_name == sheet)
+            .where(ReferenceLine.regel_type == REFERENCE_INDEX_TYPE)
+            .order_by(ReferenceLine.source_row, ReferenceLine.line_number)
+        ).first()
+        bdb_factor = index_line.bdb_indexering if index_line and index_line.bdb_indexering is not None else None
+
+        def source_money(value: object) -> str:
+            return "-" if value in (None, "") else escape(_euro(value))
+
+        def indexed_money(value: object) -> str:
+            if value in (None, "") or bdb_factor in (None, ""):
+                return "-"
+            try:
+                indexed_value = Decimal(str(value)) * Decimal(str(bdb_factor))
+            except (InvalidOperation, ValueError):
+                return "-"
+            return escape(_euro(indexed_value))
+
+        safe_sheet = escape(sheet or "Bronbegroting")
+        safe_name = escape(dataset.original_filename or dataset.name)
+        body_rows = "\n".join(
+            "<tr>"
+            f"<td>{escape(str(line.source_row or ''))}</td>"
+            f"<td class=\"text\">{escape(line.omschrijving_werkzaamheden or '')}</td>"
+            f"<td>{escape(_format_quantity(line.hoeveelheid))}</td>"
+            f"<td>{escape(line.eenheid or '')}</td>"
+            f"<td>{source_money(line.eenheidsprijs)}</td>"
+            f"<td>{indexed_money(line.eenheidsprijs)}</td>"
+            f"<td>{source_money(line.totaal_prijs_per_regel)}</td>"
+            f"<td>{indexed_money(line.totaal_prijs_per_regel)}</td>"
+            f"<td>{escape(line.raw_text or '')}</td>"
+            "</tr>"
+            for line in source_lines
+        )
+        return HTMLResponse(
+            f"""<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{safe_sheet}</title>
+    <style>
+      :root {{ color-scheme: dark; --bg: #07131b; --panel: #102f49; --line: #2d6385; --head: #25506a; --text: #f7fbff; --muted: #b8c9d7; }}
+      * {{ box-sizing: border-box; }}
+      body {{ margin: 0; color: var(--text); background: var(--bg); font-family: Arial, Helvetica, sans-serif; }}
+      header {{ position: sticky; top: 0; z-index: 2; padding: 10px 12px; border-bottom: 1px solid var(--line); background: rgba(7, 19, 27, 0.96); }}
+      strong, small {{ display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; }}
+      small {{ color: var(--muted); font-size: 12px; }}
+      main {{ overflow: auto; padding: 10px; }}
+      table {{ min-width: 1260px; width: 100%; border-collapse: collapse; background: var(--panel); }}
+      th {{ position: sticky; top: 53px; z-index: 1; padding: 7px; border: 1px solid rgba(126, 169, 219, 0.2); background: var(--head); color: #d8f6ff; font-size: 11px; text-align: left; }}
+      td {{ max-width: 320px; min-width: 72px; padding: 6px 7px; border: 1px solid rgba(126, 169, 219, 0.2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }}
+      td.text {{ white-space: normal; min-width: 380px; }}
+      tr:nth-child(odd) td {{ background: rgba(255, 255, 255, 0.025); }}
+    </style>
+  </head>
+  <body>
+    <header><strong>{safe_sheet}</strong><small>{safe_name} · {len(source_lines)} bronregels · BDB-factor {escape(str(bdb_factor or 'niet gevonden'))}</small></header>
+    <main>
+      <table>
+        <thead>
+          <tr><th>Rij</th><th>Onderdeel</th><th>Hvh</th><th>Ehd</th><th>€/eenheid bron</th><th>€/eenheid index</th><th>€/totaal bron</th><th>€/totaal index</th><th>Bron</th></tr>
+        </thead>
+        <tbody>{body_rows}</tbody>
+      </table>
+    </main>
+  </body>
+</html>"""
+        )
+
+    file_path = settings.upload_dir / dataset.stored_filename if dataset.stored_filename else None
+    if file_path is None or not file_path.exists():
+        return HTMLResponse(
+            """<!doctype html><html lang="nl"><body style="margin:0;background:#07131b;color:#f7fbff;font-family:Arial,sans-serif;padding:18px">
+            <h2 style="margin:0 0 8px;text-transform:none">Bronregels zijn nog niet ingeladen</h2>
+            <p style="color:#b8c9d7">Draai de kengetallen-import opnieuw. Daarna wordt dit tabblad rechtstreeks uit de database getoond.</p>
+            </body></html>""",
+            status_code=404,
+        )
 
     try:
         from openpyxl import load_workbook
@@ -2949,7 +3037,7 @@ def _import_reference_project_sheet(session: Session, dataset: ReferenceDataset,
         line = ReferenceLine(
             dataset_id=dataset.id,
             line_number=next_line_number,
-            regel_type="regel",
+            regel_type=REFERENCE_PROJECT_SHEET_TYPE,
             niveau=0,
             hoofdstuk_omschrijving=current_section or None,
             project_name=sheet_name,
