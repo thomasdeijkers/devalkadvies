@@ -1581,8 +1581,10 @@ textarea {
 }
 
 .modal-panel.kengetal-project-modal {
-  width: min(1520px, calc(100vw - 28px));
-  max-height: calc(100vh - 44px);
+  width: 96vw;
+  max-width: 1760px;
+  height: 94vh;
+  max-height: 94vh;
   overflow: auto;
   padding: 24px;
 }
@@ -1673,8 +1675,8 @@ textarea {
 
 .kengetal-sheet-preview iframe {
   width: 100%;
-  height: clamp(520px, 64vh, 760px);
-  min-height: 520px;
+  height: clamp(560px, 66vh, 820px);
+  min-height: 560px;
   display: block;
   border: 1px solid rgba(126, 169, 219, 0.28);
   border-radius: 6px;
