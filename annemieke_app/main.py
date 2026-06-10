@@ -851,17 +851,17 @@ def reference_sheet_preview(
 
         safe_sheet = escape(sheet or "Bronbegroting")
         active_field = (field or "").strip().lower()
-        priced_lines = [
-            line
-            for line in source_lines
-            if line.eenheidsprijs is not None
-            or line.totaal_prijs_per_regel is not None
-            or source_meta_value(line.raw_text, "m2bvo")
-        ]
-        if not priced_lines:
-            priced_lines = source_lines
+
+        def source_row_class(line: ReferenceLine) -> str:
+            classes: list[str] = []
+            if row and line.source_row == row:
+                classes.append("active-row")
+            if active_field and _source_line_matches_category(line, active_field):
+                classes.append("active-category")
+            return " ".join(classes)
+
         body_rows = "\n".join(
-            f"<tr class=\"{'active-row' if row and line.source_row == row else ''}\">"
+            f"<tr class=\"{source_row_class(line)}\">"
             f"<td>{escape(str(line.source_row or ''))}</td>"
             f"<td class=\"text\">{escape(line.omschrijving_werkzaamheden or '')}</td>"
             f"<td>{source_quantity(line.hoeveelheid)}</td>"
@@ -870,7 +870,7 @@ def reference_sheet_preview(
             f"<td>{source_money(line.totaal_prijs_per_regel)}</td>"
             f"<td>{source_money(source_meta_value(line.raw_text, 'm2bvo'))}</td>"
             "</tr>"
-            for line in priced_lines
+            for line in source_lines
         )
         return HTMLResponse(
             f"""<!doctype html>
@@ -893,6 +893,7 @@ def reference_sheet_preview(
       td.text {{ white-space: normal; min-width: 380px; }}
       tr:nth-child(odd) td {{ background: rgba(255, 255, 255, 0.025); }}
       tr.active-row td {{ background: rgba(31, 226, 135, .14); box-shadow: inset 0 0 0 1px rgba(31, 226, 135, .35); }}
+      tr.active-category td {{ background: rgba(31, 226, 135, .1); box-shadow: inset 0 0 0 1px rgba(31, 226, 135, .24); }}
       .field-chip {{ display: inline-flex; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: rgba(31, 226, 135, .16); color: var(--active); }}
     </style>
   </head>
@@ -1027,11 +1028,6 @@ def reference_sheet_attachment(
         except Exception:
             return escape(str(value))
 
-    priced_lines = [
-        line
-        for line in source_lines
-        if line.eenheidsprijs is not None or line.totaal_prijs_per_regel is not None or source_meta_value(line.raw_text, "m2bvo")
-    ] or source_lines
     body_rows = "\n".join(
         "<tr>"
         f"<td>{escape(str(line.source_row or ''))}</td>"
@@ -1042,7 +1038,7 @@ def reference_sheet_attachment(
         f"<td>{source_money(line.totaal_prijs_per_regel)}</td>"
         f"<td>{source_money(source_meta_value(line.raw_text, 'm2bvo'))}</td>"
         "</tr>"
-        for line in priced_lines
+        for line in source_lines
     )
     safe_sheet = escape(sheet or "Bronblad")
     safe_name = escape(dataset.original_filename or dataset.name)
@@ -2237,6 +2233,7 @@ def _reference_index_sections(session: Session, query: str | None, limit: int = 
             ReferenceLine.line_number,
         ).limit(limit)
     ).unique().all()
+    source_lookup = _reference_source_lookup(session, lines)
     grouped: dict[tuple[object, ...], dict[str, object]] = {}
     section_order: dict[str, int] = {}
 
@@ -2283,8 +2280,10 @@ def _reference_index_sections(session: Session, query: str | None, limit: int = 
                 "date_input": line.document_date.strftime("%Y-%m-%d") if line.document_date else "",
                 "date_label": line.document_date.strftime("%d-%m-%Y") if line.document_date else "",
                 "categories": {},
+                "original_categories": {},
                 "category_ids": {},
                 "category_sources": {},
+                "original_category_sources": {},
                 "active_category_key": "",
                 "source_rows": [],
                 "category_count": 0,
@@ -2294,9 +2293,18 @@ def _reference_index_sections(session: Session, query: str | None, limit: int = 
         row_data = grouped[key]
         stored_value = line.eenheidsprijs if line.eenheidsprijs is not None else line.totaal_prijs_per_regel
         value = _reindexed_reference_value(stored_value, stored_bdb_indexering, bdb_indexering)
+        original_value, original_source = _reference_original_category_value(
+            source_lookup,
+            line.dataset_id,
+            line.project_sheet_name,
+            category_key,
+        )
         row_data["categories"][category_key] = value
+        row_data["original_categories"][category_key] = original_value
         row_data["category_ids"][category_key] = line.id
         row_data["category_sources"][category_key] = _reference_line_source_label(line, raw_meta, category_key)
+        if original_source:
+            row_data["original_category_sources"][category_key] = original_source
         if not row_data["active_category_key"]:
             row_data["active_category_key"] = category_key
         row_data["category_count"] = int(row_data["category_count"]) + 1
@@ -2339,6 +2347,103 @@ def _reference_index_sections(session: Session, query: str | None, limit: int = 
         )
     result.sort(key=lambda item: item["sort_key"])
     return result
+
+
+def _reference_source_lookup(
+    session: Session,
+    index_lines: list[ReferenceLine],
+) -> dict[tuple[int, str], list[ReferenceLine]]:
+    sheet_pairs = {
+        (line.dataset_id, line.project_sheet_name)
+        for line in index_lines
+        if line.project_sheet_name
+    }
+    if not sheet_pairs:
+        return {}
+    dataset_ids = {dataset_id for dataset_id, _sheet in sheet_pairs}
+    sheet_names = {sheet for _dataset_id, sheet in sheet_pairs}
+    source_lines = session.scalars(
+        select(ReferenceLine)
+        .where(ReferenceLine.dataset_id.in_(dataset_ids))
+        .where(ReferenceLine.project_sheet_name.in_(sheet_names))
+        .where(ReferenceLine.regel_type == REFERENCE_PROJECT_SHEET_TYPE)
+        .order_by(ReferenceLine.source_row, ReferenceLine.line_number)
+    ).all()
+    lookup: dict[tuple[int, str], list[ReferenceLine]] = {}
+    for line in source_lines:
+        if not line.project_sheet_name:
+            continue
+        key = (line.dataset_id, line.project_sheet_name)
+        if key in sheet_pairs:
+            lookup.setdefault(key, []).append(line)
+    return lookup
+
+
+def _reference_original_category_value(
+    source_lookup: dict[tuple[int, str], list[ReferenceLine]],
+    dataset_id: int,
+    project_sheet_name: str | None,
+    category_key: str,
+) -> tuple[Decimal | None, str]:
+    if not project_sheet_name:
+        return None, ""
+    source_lines = source_lookup.get((dataset_id, project_sheet_name), [])
+    if not source_lines:
+        return None, ""
+    category_label = dict(REFERENCE_CATEGORY_COLUMNS).get(category_key, category_key)
+    wanted = _normalize_reference_text(category_label)
+    candidates: list[tuple[int, ReferenceLine, Decimal]] = []
+    for line in source_lines:
+        value = _reference_source_price_value(line)
+        if value is None:
+            continue
+        description = _normalize_reference_text(line.omschrijving_werkzaamheden)
+        section = _normalize_reference_text(line.hoofdstuk_omschrijving)
+        if description == wanted:
+            score = 0
+        elif section == wanted and description in {wanted, "algemeen", ""}:
+            score = 1
+        elif section == wanted:
+            score = 2
+        elif wanted in description:
+            score = 3
+        else:
+            continue
+        candidates.append((score, line, value))
+    if not candidates:
+        return None, ""
+    candidates.sort(key=lambda item: (item[0], item[1].source_row or 999999, item[1].line_number))
+    _score, line, value = candidates[0]
+    source = f"Origineel bronblad {project_sheet_name} rij {line.source_row or line.line_number}"
+    return value, source
+
+
+def _reference_source_price_value(line: ReferenceLine) -> Decimal | None:
+    raw_meta = _reference_raw_meta(line.raw_text)
+    for value in (
+        raw_meta.get("m2bvo"),
+        line.eenheidsprijs,
+        line.totaal_prijs_per_regel,
+    ):
+        if value in (None, ""):
+            continue
+        try:
+            return Decimal(str(value))
+        except InvalidOperation:
+            continue
+    return None
+
+
+def _normalize_reference_text(value: object) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).strip()
+
+
+def _source_line_matches_category(line: ReferenceLine, category_key: str) -> bool:
+    category_label = dict(REFERENCE_CATEGORY_COLUMNS).get(category_key, category_key)
+    wanted = _normalize_reference_text(category_label)
+    description = _normalize_reference_text(line.omschrijving_werkzaamheden)
+    section = _normalize_reference_text(line.hoofdstuk_omschrijving)
+    return description == wanted or section == wanted or bool(wanted and wanted in description)
 
 
 def _reference_index_summary(session: Session, sections: list[dict[str, object]]) -> dict[str, object]:
@@ -2472,7 +2577,7 @@ def _reference_raw_meta(raw_text: str | None) -> dict[str, str]:
         key, value = part.split(":", 1)
         key = key.strip().lower()
         value = value.strip()
-        if key in {"rij", "fase", "periode", "categorie"} and value:
+        if key in {"rij", "fase", "periode", "categorie", "m2bvo"} and value:
             meta[key] = value
     return meta
 

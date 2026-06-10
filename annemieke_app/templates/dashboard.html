@@ -270,12 +270,19 @@
                   <div class="kengetal-category-editor">
                     {% for category_key, category_label in reference_category_columns %}
                       {% set value = row.categories.get(category_key) %}
+                      {% set original_value = row.original_categories.get(category_key) %}
                       {% set value_source = row.category_sources.get(category_key) %}
+                      {% set original_source = row.original_category_sources.get(category_key) %}
                       {% set safe_key = category_key|replace(" ", "_") %}
                       <label data-reference-field="{{ category_key }}" class="{% if category_key == row.active_category_key %}is-referenced-field{% endif %}">
                         <span>{{ category_label }}</span>
                         {% if value_source %}<small>{{ value_source }}</small>{% endif %}
                         <input name="cat_{{ safe_key }}" value="{{ value|amount if value is not none else '' }}">
+                        <em class="kengetal-price-pair">
+                          <span>Origineel: {% if original_value is not none %}{{ original_value|euro }}{% else %}-{% endif %}</span>
+                          <span>Geïndexeerd: {% if value is not none %}{{ value|euro }}{% else %}-{% endif %}</span>
+                        </em>
+                        {% if original_source %}<small>{{ original_source }}</small>{% endif %}
                       </label>
                     {% endfor %}
                   </div>

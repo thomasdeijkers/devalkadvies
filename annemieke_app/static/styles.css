@@ -1670,6 +1670,29 @@ textarea {
   white-space: normal;
 }
 
+.kengetal-price-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 3px;
+  color: #d8f6ff;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.kengetal-price-pair span {
+  min-width: 0;
+  overflow: hidden;
+  padding: 5px 7px;
+  border: 1px solid rgba(126, 169, 219, 0.18);
+  border-radius: 5px;
+  background: rgba(2, 22, 43, 0.42);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .kengetal-category-editor label.is-referenced-field {
   border-color: rgba(31, 226, 135, 0.75);
   background: rgba(31, 226, 135, 0.08);
