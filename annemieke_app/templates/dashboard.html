@@ -218,6 +218,9 @@
               {% endfor %}
               <span class="button-cell col-action">
                 <a class="mini-button compact-source-button" href="#{{ row.modal_id }}" title="{{ row.source_filename or row.dataset_name }}{% if row.project_sheet_name %} · {{ row.project_sheet_name }}{% endif %}{% if row.source_row_label %} · rij {{ row.source_row_label }}{% endif %}{% if row.index_reference %} · {{ row.index_reference }}{% endif %}">Open</a>
+                {% if row.project_sheet_name %}
+                  <a class="mini-button compact-source-button" href="/kengetallen/{{ row.dataset_id }}/sheet-pdf?sheet={{ row.project_sheet_name|urlencode }}" target="_blank" rel="noopener">Bijlage</a>
+                {% endif %}
               </span>
             </div>
             <div id="{{ row.modal_id }}" class="modal-card">
@@ -236,7 +239,7 @@
                   {% if row.project_sheet_name %}
                     <div class="kengetal-sheet-preview">
                       <div>
-                        <strong>Prijzen bronblad</strong>
+                        <strong>Originele prijzen bronblad</strong>
                         <span>{{ row.project_sheet_name }}</span>
                         <a class="mini-button" href="/kengetallen/{{ row.dataset_id }}/sheet-pdf?sheet={{ row.project_sheet_name|urlencode }}" target="_blank" rel="noopener">Bijlage</a>
                       </div>

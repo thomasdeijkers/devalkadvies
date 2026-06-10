@@ -1268,6 +1268,11 @@ textarea {
   justify-content: center;
 }
 
+.kengetal-index-row .button-cell {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .kengetal-index-row .numeric-cell {
   justify-content: flex-end;
   text-align: right;
@@ -1624,7 +1629,7 @@ textarea {
 .kengetal-sheet-preview > div {
   display: flex;
   gap: 10px;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   min-width: 0;
 }
@@ -1635,11 +1640,16 @@ textarea {
 }
 
 .kengetal-sheet-preview span {
+  flex: 1;
   overflow: hidden;
   color: var(--soft);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.kengetal-sheet-preview .mini-button {
+  flex: 0 0 auto;
 }
 
 .kengetal-sheet-preview iframe {
