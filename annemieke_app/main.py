@@ -2296,12 +2296,15 @@ def _reference_index_sections(session: Session, query: str | None, limit: int = 
         row_data = grouped[key]
         stored_value = line.eenheidsprijs if line.eenheidsprijs is not None else line.totaal_prijs_per_regel
         value = _reindexed_reference_value(stored_value, stored_bdb_indexering, bdb_indexering)
-        original_value, original_source = _reference_original_category_value(
+        _source_original_value, original_source = _reference_original_category_value(
             source_lookup,
             line.dataset_id,
             line.project_sheet_name,
             category_key,
         )
+        original_value = _deindexed_reference_value(value, bdb_indexering)
+        if original_value is None:
+            original_value = _source_original_value
         row_data["categories"][category_key] = value
         row_data["original_categories"][category_key] = original_value
         row_data["category_ids"][category_key] = line.id
@@ -2531,6 +2534,22 @@ def _reindexed_reference_value(
         ).quantize(Decimal("0.01"))
     except (InvalidOperation, ZeroDivisionError):
         return Decimal(str(value))
+
+
+def _deindexed_reference_value(
+    value: Decimal | int | float | str | None,
+    bdb_indexering: Decimal | None,
+) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        amount_value = Decimal(str(value))
+        factor = Decimal(str(bdb_indexering))
+        if factor == Decimal("0"):
+            return amount_value
+        return (amount_value / factor).quantize(Decimal("0.01"))
+    except (InvalidOperation, ZeroDivisionError, TypeError):
+        return None
 
 
 def _reference_index_reference(
