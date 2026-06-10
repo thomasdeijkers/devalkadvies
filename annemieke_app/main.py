@@ -828,7 +828,20 @@ def reference_sheet_preview(
     ).all()
     if source_lines:
         def source_money(value: object) -> str:
-            return "-" if value in (None, "") else escape(euro(value))
+            if value in (None, ""):
+                return "-"
+            try:
+                return escape(euro(value))
+            except Exception:
+                return escape(str(value))
+
+        def source_quantity(value: object) -> str:
+            if value in (None, ""):
+                return ""
+            try:
+                return escape(_format_quantity(value))
+            except Exception:
+                return escape(str(value))
 
         def source_meta_value(raw_text: str | None, name: str) -> str:
             for part in (raw_text or "").split("|"):
@@ -851,7 +864,7 @@ def reference_sheet_preview(
             f"<tr class=\"{'active-row' if row and line.source_row == row else ''}\">"
             f"<td>{escape(str(line.source_row or ''))}</td>"
             f"<td class=\"text\">{escape(line.omschrijving_werkzaamheden or '')}</td>"
-            f"<td>{escape(_format_quantity(line.hoeveelheid))}</td>"
+            f"<td>{source_quantity(line.hoeveelheid)}</td>"
             f"<td>{escape(line.eenheid or '')}</td>"
             f"<td>{source_money(line.eenheidsprijs)}</td>"
             f"<td>{source_money(line.totaal_prijs_per_regel)}</td>"
@@ -999,7 +1012,20 @@ def reference_sheet_attachment(
         return ""
 
     def source_money(value: object) -> str:
-        return "-" if value in (None, "") else escape(euro(value))
+        if value in (None, ""):
+            return "-"
+        try:
+            return escape(euro(value))
+        except Exception:
+            return escape(str(value))
+
+    def source_quantity(value: object) -> str:
+        if value in (None, ""):
+            return ""
+        try:
+            return escape(_format_quantity(value))
+        except Exception:
+            return escape(str(value))
 
     priced_lines = [
         line
@@ -1010,7 +1036,7 @@ def reference_sheet_attachment(
         "<tr>"
         f"<td>{escape(str(line.source_row or ''))}</td>"
         f"<td>{escape(line.omschrijving_werkzaamheden or '')}</td>"
-        f"<td>{escape(_format_quantity(line.hoeveelheid))}</td>"
+        f"<td>{source_quantity(line.hoeveelheid)}</td>"
         f"<td>{escape(line.eenheid or '')}</td>"
         f"<td>{source_money(line.eenheidsprijs)}</td>"
         f"<td>{source_money(line.totaal_prijs_per_regel)}</td>"
