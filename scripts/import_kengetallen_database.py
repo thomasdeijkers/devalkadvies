@@ -193,13 +193,13 @@ def _kengetallen_index_lines(path: Path, dataset: ReferenceDataset) -> list[Refe
                         hoofdstuk_code=category_key,
                         hoofdstuk_omschrijving=block["section"],
                         post_code=category_key,
-                        project_name=project_name,
-                        relation_name=variant,
+                        project_name=_limit_text(project_name, 180),
+                        relation_name=_limit_text(variant, 180),
                         document_date=price_date,
-                        phase=phase,
-                        period=period,
+                        phase=_limit_text(phase, 120),
+                        period=_limit_text(period, 40),
                         bdb_indexering=index_factor,
-                        project_sheet_name=project_sheet_name,
+                        project_sheet_name=_limit_text(project_sheet_name, 180),
                         source_row=row,
                         omschrijving_werkzaamheden=description,
                         hoeveelheid=Decimal("1"),
@@ -331,20 +331,20 @@ def _project_sheet_source_lines(
                         line_number=start_line_number + len(lines),
                         regel_type=REFERENCE_PROJECT_SHEET_TYPE,
                         niveau=0,
-                        hoofdstuk_code=code or None,
-                        hoofdstuk_omschrijving=current_section or None,
-                        post_code=code or None,
-                        project_name=metadata.get("project_name") or _project_title_from_sheet(sheet),
-                        relation_name=metadata.get("variant"),
+                        hoofdstuk_code=_limit_text(code, 80),
+                        hoofdstuk_omschrijving=_limit_text(current_section, 255),
+                        post_code=_limit_text(code, 80),
+                        project_name=_limit_text(metadata.get("project_name") or _project_title_from_sheet(sheet), 180),
+                        relation_name=_limit_text(metadata.get("variant"), 180),
                         document_date=metadata.get("document_date"),
-                        phase=metadata.get("phase"),
-                        period=metadata.get("period"),
+                        phase=_limit_text(metadata.get("phase"), 120),
+                        period=_limit_text(metadata.get("period"), 40),
                         bdb_indexering=metadata.get("bdb_indexering"),
-                        project_sheet_name=sheet.title,
+                        project_sheet_name=_limit_text(sheet.title, 180),
                         source_row=row,
                         omschrijving_werkzaamheden=description,
                         hoeveelheid=quantity,
-                        eenheid=unit,
+                        eenheid=_limit_text(unit, 40),
                         totaal_prijs_per_regel=total_price,
                         eenheidsprijs=unit_price,
                         bron_pagina=None,
@@ -426,6 +426,13 @@ def _header_token(value: Any) -> str:
     text = _text(value).lower()
     text = text.replace("€", "euro").replace("/", "").replace("-", "")
     return re.sub(r"[^a-z0-9]+", "", text)
+
+
+def _limit_text(value: Any, max_length: int) -> str | None:
+    text = _text(value)
+    if not text:
+        return None
+    return text[:max_length]
 
 
 def _generic_reference_lines(path: Path, dataset: ReferenceDataset) -> list[ReferenceLine]:
