@@ -207,6 +207,7 @@
               <span class="col-index-meta">{{ row.bdb_indexering|amount if row.bdb_indexering else "-" }}</span>
               {% for category_key, category_label in reference_category_columns %}
                 {% set value = row.categories.get(category_key) %}
+                {% set original_value = row.original_categories.get(category_key) %}
                 {% set value_source = row.category_sources.get(category_key) %}
                 <span class="numeric-cell col-price">
                   {% if value is not none %}
@@ -217,7 +218,12 @@
                       data-modal-id="{{ row.modal_id }}"
                       data-field="{{ category_key }}"
                       data-preview-src="/kengetallen/{{ row.dataset_id }}/sheet-preview?sheet={{ row.project_sheet_name|urlencode }}&row={{ row.source_row }}&field={{ category_key|urlencode }}"
-                    >{{ value|euro }}</a>
+                    >
+                      <strong>{{ value|euro }}</strong>
+                      {% if original_value is not none %}
+                        <small>Origineel {{ original_value|euro }}</small>
+                      {% endif %}
+                    </a>
                   {% else %}
                     -
                   {% endif %}
