@@ -812,6 +812,8 @@ def delete_reference_dataset(dataset_id: int, session: Session = Depends(get_ses
 def reference_sheet_preview(
     dataset_id: int,
     sheet: str | None = None,
+    row: int | None = None,
+    field: str | None = None,
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     dataset = session.get(ReferenceDataset, dataset_id)
@@ -825,42 +827,37 @@ def reference_sheet_preview(
         .order_by(ReferenceLine.source_row, ReferenceLine.line_number)
     ).all()
     if source_lines:
-        index_line = session.scalars(
-            select(ReferenceLine)
-            .where(ReferenceLine.dataset_id == dataset_id)
-            .where(ReferenceLine.project_sheet_name == sheet)
-            .where(ReferenceLine.regel_type == REFERENCE_INDEX_TYPE)
-            .order_by(ReferenceLine.source_row, ReferenceLine.line_number)
-        ).first()
-        bdb_factor = index_line.bdb_indexering if index_line and index_line.bdb_indexering is not None else None
-
         def source_money(value: object) -> str:
             return "-" if value in (None, "") else escape(_euro(value))
 
-        def indexed_money(value: object) -> str:
-            if value in (None, "") or bdb_factor in (None, ""):
-                return "-"
-            try:
-                indexed_value = Decimal(str(value)) * Decimal(str(bdb_factor))
-            except (InvalidOperation, ValueError):
-                return "-"
-            return escape(_euro(indexed_value))
+        def source_meta_value(raw_text: str | None, name: str) -> str:
+            for part in (raw_text or "").split("|"):
+                if part.lower().startswith(f"{name.lower()}:"):
+                    return part.split(":", 1)[1].strip()
+            return ""
 
         safe_sheet = escape(sheet or "Bronbegroting")
-        safe_name = escape(dataset.original_filename or dataset.name)
+        active_field = (field or "").strip().lower()
+        priced_lines = [
+            line
+            for line in source_lines
+            if line.eenheidsprijs is not None
+            or line.totaal_prijs_per_regel is not None
+            or source_meta_value(line.raw_text, "m2bvo")
+        ]
+        if not priced_lines:
+            priced_lines = source_lines
         body_rows = "\n".join(
-            "<tr>"
+            f"<tr class=\"{'active-row' if row and line.source_row == row else ''}\">"
             f"<td>{escape(str(line.source_row or ''))}</td>"
             f"<td class=\"text\">{escape(line.omschrijving_werkzaamheden or '')}</td>"
             f"<td>{escape(_format_quantity(line.hoeveelheid))}</td>"
             f"<td>{escape(line.eenheid or '')}</td>"
             f"<td>{source_money(line.eenheidsprijs)}</td>"
-            f"<td>{indexed_money(line.eenheidsprijs)}</td>"
             f"<td>{source_money(line.totaal_prijs_per_regel)}</td>"
-            f"<td>{indexed_money(line.totaal_prijs_per_regel)}</td>"
-            f"<td>{escape(line.raw_text or '')}</td>"
+            f"<td>{source_money(source_meta_value(line.raw_text, 'm2bvo'))}</td>"
             "</tr>"
-            for line in source_lines
+            for line in priced_lines
         )
         return HTMLResponse(
             f"""<!doctype html>
@@ -870,26 +867,28 @@ def reference_sheet_preview(
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{safe_sheet}</title>
     <style>
-      :root {{ color-scheme: dark; --bg: #07131b; --panel: #102f49; --line: #2d6385; --head: #25506a; --text: #f7fbff; --muted: #b8c9d7; }}
+      :root {{ color-scheme: dark; --bg: #07131b; --panel: #102f49; --line: #2d6385; --head: #25506a; --text: #f7fbff; --muted: #b8c9d7; --active: #1fe287; }}
       * {{ box-sizing: border-box; }}
       body {{ margin: 0; color: var(--text); background: var(--bg); font-family: Arial, Helvetica, sans-serif; }}
       header {{ position: sticky; top: 0; z-index: 2; padding: 10px 12px; border-bottom: 1px solid var(--line); background: rgba(7, 19, 27, 0.96); }}
       strong, small {{ display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; }}
       small {{ color: var(--muted); font-size: 12px; }}
       main {{ overflow: auto; padding: 10px; }}
-      table {{ min-width: 1260px; width: 100%; border-collapse: collapse; background: var(--panel); }}
+      table {{ min-width: 880px; width: 100%; border-collapse: collapse; background: var(--panel); }}
       th {{ position: sticky; top: 53px; z-index: 1; padding: 7px; border: 1px solid rgba(126, 169, 219, 0.2); background: var(--head); color: #d8f6ff; font-size: 11px; text-align: left; }}
       td {{ max-width: 320px; min-width: 72px; padding: 6px 7px; border: 1px solid rgba(126, 169, 219, 0.2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }}
       td.text {{ white-space: normal; min-width: 380px; }}
       tr:nth-child(odd) td {{ background: rgba(255, 255, 255, 0.025); }}
+      tr.active-row td {{ background: rgba(31, 226, 135, .14); box-shadow: inset 0 0 0 1px rgba(31, 226, 135, .35); }}
+      .field-chip {{ display: inline-flex; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: rgba(31, 226, 135, .16); color: var(--active); }}
     </style>
   </head>
   <body>
-    <header><strong>{safe_sheet}</strong><small>{safe_name} · {len(source_lines)} bronregels · BDB-factor {escape(str(bdb_factor or 'niet gevonden'))}</small></header>
+    <header><strong>{safe_sheet}</strong><small>Originele prijzen uit het bronblad{f'<span class="field-chip">{escape(active_field)}</span>' if active_field else ''}</small></header>
     <main>
       <table>
         <thead>
-          <tr><th>Rij</th><th>Onderdeel</th><th>Hvh</th><th>Ehd</th><th>€/eenheid bron</th><th>€/eenheid index</th><th>€/totaal bron</th><th>€/totaal index</th><th>Bron</th></tr>
+          <tr><th>Rij</th><th>Onderdeel</th><th>Hvh</th><th>Ehd</th><th>€/eenheid</th><th>€/totaal</th><th>€/m2bvo</th></tr>
         </thead>
         <tbody>{body_rows}</tbody>
       </table>
@@ -959,6 +958,92 @@ def reference_sheet_preview(
   <body>
     <header><strong>{safe_sheet}</strong><small>{safe_name} · eerste {len(rows)} gevulde regels</small></header>
     <main><table><tbody>{body_rows}</tbody></table></main>
+  </body>
+</html>"""
+    )
+
+
+@app.get("/kengetallen/{dataset_id}/sheet-pdf", response_class=HTMLResponse)
+def reference_sheet_attachment(
+    dataset_id: int,
+    sheet: str | None = None,
+    session: Session = Depends(get_session),
+) -> HTMLResponse | FileResponse:
+    dataset = session.get(ReferenceDataset, dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="Bronbestand niet gevonden.")
+    pdf_name = f"kengetallen-{dataset_id}-{_slugify(sheet or 'bronblad')}.pdf"
+    pdf_path = settings.upload_dir / pdf_name
+    if pdf_path.exists():
+        return FileResponse(pdf_path, media_type="application/pdf", filename=pdf_name)
+
+    source_lines = session.scalars(
+        select(ReferenceLine)
+        .where(ReferenceLine.dataset_id == dataset_id)
+        .where(ReferenceLine.project_sheet_name == sheet)
+        .where(ReferenceLine.regel_type == REFERENCE_PROJECT_SHEET_TYPE)
+        .order_by(ReferenceLine.source_row, ReferenceLine.line_number)
+    ).all()
+    if not source_lines:
+        return HTMLResponse(
+            """<!doctype html><html lang="nl"><body style="font-family:Arial,sans-serif;padding:24px">
+            <h1>Bijlage niet gevonden</h1><p>Importeer de kengetallen opnieuw om de bronregels op te bouwen.</p>
+            </body></html>""",
+            status_code=404,
+        )
+
+    def source_meta_value(raw_text: str | None, name: str) -> str:
+        for part in (raw_text or "").split("|"):
+            if part.lower().startswith(f"{name.lower()}:"):
+                return part.split(":", 1)[1].strip()
+        return ""
+
+    def source_money(value: object) -> str:
+        return "-" if value in (None, "") else escape(_euro(value))
+
+    priced_lines = [
+        line
+        for line in source_lines
+        if line.eenheidsprijs is not None or line.totaal_prijs_per_regel is not None or source_meta_value(line.raw_text, "m2bvo")
+    ] or source_lines
+    body_rows = "\n".join(
+        "<tr>"
+        f"<td>{escape(str(line.source_row or ''))}</td>"
+        f"<td>{escape(line.omschrijving_werkzaamheden or '')}</td>"
+        f"<td>{escape(_format_quantity(line.hoeveelheid))}</td>"
+        f"<td>{escape(line.eenheid or '')}</td>"
+        f"<td>{source_money(line.eenheidsprijs)}</td>"
+        f"<td>{source_money(line.totaal_prijs_per_regel)}</td>"
+        f"<td>{source_money(source_meta_value(line.raw_text, 'm2bvo'))}</td>"
+        "</tr>"
+        for line in priced_lines
+    )
+    safe_sheet = escape(sheet or "Bronblad")
+    safe_name = escape(dataset.original_filename or dataset.name)
+    return HTMLResponse(
+        f"""<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8">
+    <title>{safe_sheet}</title>
+    <style>
+      body {{ margin: 24px; color: #101820; background: #fff; font-family: Arial, Helvetica, sans-serif; font-size: 11px; }}
+      h1 {{ margin: 0 0 4px; font-size: 20px; text-transform: none; }}
+      p {{ margin: 0 0 14px; color: #526170; }}
+      table {{ width: 100%; border-collapse: collapse; }}
+      th {{ background: #d7e3f3; color: #101820; text-align: left; }}
+      th, td {{ border: 1px solid #b9c6d8; padding: 5px 6px; vertical-align: top; }}
+      td:nth-child(5), td:nth-child(6), td:nth-child(7) {{ text-align: right; white-space: nowrap; }}
+      @media print {{ body {{ margin: 10mm; }} }}
+    </style>
+  </head>
+  <body>
+    <h1>{safe_sheet}</h1>
+    <p>{safe_name} · originele prijzen uit bronblad</p>
+    <table>
+      <thead><tr><th>Rij</th><th>Onderdeel</th><th>Hvh</th><th>Ehd</th><th>€/eenheid</th><th>€/totaal</th><th>€/m2bvo</th></tr></thead>
+      <tbody>{body_rows}</tbody>
+    </table>
   </body>
 </html>"""
     )
@@ -2174,6 +2259,7 @@ def _reference_index_sections(session: Session, query: str | None, limit: int = 
                 "categories": {},
                 "category_ids": {},
                 "category_sources": {},
+                "active_category_key": "",
                 "source_rows": [],
                 "category_count": 0,
                 "total": Decimal("0"),
@@ -2185,6 +2271,8 @@ def _reference_index_sections(session: Session, query: str | None, limit: int = 
         row_data["categories"][category_key] = value
         row_data["category_ids"][category_key] = line.id
         row_data["category_sources"][category_key] = _reference_line_source_label(line, raw_meta, category_key)
+        if not row_data["active_category_key"]:
+            row_data["active_category_key"] = category_key
         row_data["category_count"] = int(row_data["category_count"]) + 1
         if source_row and source_row not in row_data["source_rows"]:
             row_data["source_rows"].append(source_row)
@@ -2361,6 +2449,11 @@ def _reference_raw_meta(raw_text: str | None) -> dict[str, str]:
         if key in {"rij", "fase", "periode", "categorie"} and value:
             meta[key] = value
     return meta
+
+
+def _slugify(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", (value or "").lower()).strip("-")
+    return slug or "bestand"
 
 
 def _normalization_candidate_lines(session: Session, limit: int = 120) -> list[BudgetLine]:

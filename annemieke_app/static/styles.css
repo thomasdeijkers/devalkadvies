@@ -1660,6 +1660,17 @@ textarea {
   white-space: normal;
 }
 
+.kengetal-category-editor label.is-referenced-field {
+  border-color: rgba(31, 226, 135, 0.75);
+  background: rgba(31, 226, 135, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(31, 226, 135, 0.28);
+}
+
+.kengetal-category-editor label.is-referenced-field span,
+.kengetal-category-editor label.is-referenced-field small {
+  color: #82ffd0;
+}
+
 .kengetal-project-form label {
   display: grid;
   gap: 6px;
