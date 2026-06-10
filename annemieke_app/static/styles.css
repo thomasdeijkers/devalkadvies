@@ -1604,8 +1604,9 @@ textarea {
 
 .kengetal-project-form {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(720px, 1.45fr) minmax(460px, 0.9fr);
   gap: 12px;
+  align-items: start;
 }
 
 .kengetal-source-note {
@@ -1638,7 +1639,8 @@ textarea {
 }
 
 .kengetal-sheet-preview {
-  grid-column: 1 / -1;
+  grid-column: 1;
+  grid-row: 1 / span 12;
   display: grid;
   gap: 8px;
   padding: 10px;
@@ -1675,8 +1677,8 @@ textarea {
 
 .kengetal-sheet-preview iframe {
   width: 100%;
-  height: clamp(560px, 66vh, 820px);
-  min-height: 560px;
+  height: calc(94vh - 176px);
+  min-height: 640px;
   display: block;
   border: 1px solid rgba(126, 169, 219, 0.28);
   border-radius: 6px;
@@ -1742,9 +1744,9 @@ textarea {
 }
 
 .kengetal-category-editor {
-  grid-column: 1 / -1;
+  grid-column: 2;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   padding: 12px;
   border: 1px solid var(--line);
@@ -1753,7 +1755,7 @@ textarea {
 }
 
 .kengetal-form-actions {
-  grid-column: 1 / -1;
+  grid-column: 2;
   display: grid;
   grid-template-columns: repeat(2, minmax(160px, 1fr));
   gap: 10px;
@@ -2064,6 +2066,13 @@ textarea {
 
 .modal-panel.wide {
   width: min(760px, 100%);
+}
+
+.modal-panel.wide.kengetal-project-modal {
+  width: min(96vw, 1760px);
+  max-width: none;
+  height: 94vh;
+  max-height: 94vh;
 }
 
 .modal-close {
@@ -2904,6 +2913,23 @@ pre {
 
   .budget-tools {
     width: 100%;
+  }
+}
+
+@media (max-width: 1280px) {
+  .kengetal-project-form {
+    grid-template-columns: 1fr;
+  }
+
+  .kengetal-sheet-preview,
+  .kengetal-category-editor,
+  .kengetal-form-actions {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .kengetal-category-editor {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
