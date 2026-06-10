@@ -963,12 +963,12 @@ def reference_sheet_preview(
     )
 
 
-@app.get("/kengetallen/{dataset_id}/sheet-pdf", response_class=HTMLResponse)
+@app.get("/kengetallen/{dataset_id}/sheet-pdf", response_class=HTMLResponse, response_model=None)
 def reference_sheet_attachment(
     dataset_id: int,
     sheet: str | None = None,
     session: Session = Depends(get_session),
-) -> HTMLResponse | FileResponse:
+):
     dataset = session.get(ReferenceDataset, dataset_id)
     if dataset is None:
         raise HTTPException(status_code=404, detail="Bronbestand niet gevonden.")
