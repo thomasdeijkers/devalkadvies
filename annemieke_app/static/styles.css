@@ -1144,7 +1144,13 @@ textarea {
 .kengetal-index-panel:has(#kg-toggle-index:not(:checked)) .col-index-meta,
 .kengetal-index-panel:has(#kg-toggle-prices:not(:checked)) .col-price,
 .kengetal-index-panel:has(#kg-toggle-source:not(:checked)) .col-action {
-  display: none;
+  display: none !important;
+  min-width: 0;
+  width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  overflow: hidden;
 }
 
 .kengetal-column-controls {
@@ -1228,10 +1234,11 @@ textarea {
 .kengetal-index-head {
   position: sticky;
   top: 0;
-  z-index: 4;
+  z-index: 10;
   min-height: 42px;
   color: #c9d9ed;
   background: #25465f;
+  box-shadow: 0 2px 0 rgba(126, 169, 219, 0.28), 0 12px 20px rgba(7, 19, 27, 0.38);
   font-size: 11px;
   font-weight: 900;
   text-transform: none;
@@ -1269,8 +1276,9 @@ textarea {
 }
 
 .kengetal-index-row .button-cell {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
+  justify-content: flex-start;
 }
 
 .kengetal-index-row .numeric-cell {
@@ -1311,6 +1319,20 @@ textarea {
   justify-content: center;
   font-size: 11px;
   line-height: 1;
+}
+
+.button-cell.col-action {
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.button-cell.col-action .mini-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .muted-button,
@@ -1741,6 +1763,35 @@ textarea {
 .kengetal-project-form input {
   min-height: 42px;
   font-size: 14px;
+}
+
+.currency-input {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(2, 22, 43, 0.7);
+  overflow: hidden;
+}
+
+.currency-input > span {
+  padding: 0 0 0 10px;
+  color: #8bd5e6;
+  font-weight: 900;
+}
+
+.kengetal-project-form .currency-input input {
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+  padding-left: 5px;
+}
+
+.currency-input:focus-within {
+  border-color: #55c3da;
+  box-shadow: 0 0 0 2px rgba(85, 195, 218, 0.12);
 }
 
 .kengetal-category-editor {
