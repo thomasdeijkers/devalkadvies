@@ -1,1 +1,1 @@
-"""DeValk advies begrotingsparser application package."""
+"""De Valk Advies Controle Centre application package."""

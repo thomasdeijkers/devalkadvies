@@ -1,6 +1,6 @@
-# DeValk advies Begrotingsparser
+# De Valk Advies Controle Centre
 
-Een eerste projectopzet in de huisstijlrichting van DeValk advies, waarin inkomende begrotings-PDF's worden geupload, geparsed en omgezet naar bruikbare databasegegevens en Excel-bestanden.
+Een projectopzet in de huisstijlrichting van De Valk Advies, waarin inkomende begrotings-PDF's worden geupload, geparsed en omgezet naar bruikbare databasegegevens en Excel-bestanden.
 
 ## Wat zit erin
 

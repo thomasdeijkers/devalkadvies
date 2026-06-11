@@ -347,7 +347,7 @@ def _line_confidence(lines: list[ParsedBudgetLine]) -> int:
 def _parse_budget_with_openai(path: Path, text: str) -> ParsedPdf | None:
     import requests
 
-    model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini").strip() or "gpt-4.1-mini"
+    model = os.getenv("OPENAI_MODEL", "gpt-5").strip() or "gpt-5"
     content = [
         {
             "type": "input_text",

@@ -58,7 +58,7 @@ OCR_LANG
 Aanbevolen waarden:
 
 ```text
-OPENAI_MODEL=gpt-4.1-mini
+OPENAI_MODEL=gpt-5
 OPENAI_BUDGET_FALLBACK_ENABLED=true
 OCR_ENABLED=true
 OCR_LANG=nld+eng

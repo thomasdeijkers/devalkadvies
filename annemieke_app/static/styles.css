@@ -94,8 +94,8 @@ a {
 }
 
 .brand-copy strong {
-  font-size: 18px;
-  line-height: 1.05;
+  font-size: 16px;
+  line-height: 1.1;
 }
 
 .brand-copy small {
@@ -2104,7 +2104,7 @@ textarea {
 .modal-card:target {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 120;
   display: grid;
   place-items: center;
   padding: 22px;
@@ -2119,7 +2119,7 @@ textarea {
 
 .modal-panel {
   position: relative;
-  z-index: 21;
+  z-index: 121;
   width: min(560px, 100%);
   max-height: calc(100vh - 44px);
   overflow: auto;

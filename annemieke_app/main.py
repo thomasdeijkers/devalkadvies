@@ -3514,7 +3514,7 @@ def _assessment_note(template_id: str, reference_dataset_id: str) -> str:
 def _record_openai_usage(session: Session, source: str, source_id: int, usage: dict | None) -> None:
     if not usage:
         return
-    model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini").strip() or "gpt-4.1-mini"
+    model = os.getenv("OPENAI_MODEL", "gpt-5").strip() or "gpt-5"
     event = OpenAIUsageEvent(
         source=source,
         source_id=source_id,
@@ -3586,7 +3586,7 @@ def _openai_usage_summary(session: Session) -> dict[str, object]:
         "total_requests": int(total_requests),
         "month_tokens": int(month_tokens),
         "month_cost_usd": Decimal(str(month_cost or 0)),
-        "model": os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+        "model": os.getenv("OPENAI_MODEL", "gpt-5"),
     }
 
 
@@ -3639,6 +3639,7 @@ def _format_duration(seconds: int) -> str:
 
 def _estimate_openai_cost(model: str, usage: dict) -> Decimal:
     pricing = {
+        "gpt-5": {"input": Decimal("1.25"), "cached_input": Decimal("0.125"), "output": Decimal("10.00")},
         "gpt-4.1-mini": {"input": Decimal("0.25"), "cached_input": Decimal("0.025"), "output": Decimal("2.00")},
         "gpt-4.1": {"input": Decimal("2.00"), "cached_input": Decimal("0.50"), "output": Decimal("8.00")},
         "gpt-5-mini": {"input": Decimal("0.25"), "cached_input": Decimal("0.025"), "output": Decimal("2.00")},

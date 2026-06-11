@@ -6,7 +6,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 class Settings:
-    app_name: str = os.getenv("APP_NAME", "DeValk advies Begrotingsparser")
+    app_name: str = os.getenv("APP_NAME", "De Valk Advies Controle Centre")
     database_url: str = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'database' / 'devalkadvies.db'}")
     upload_dir: Path = Path(os.getenv("UPLOAD_DIR", BASE_DIR / "uploads"))
 
