@@ -214,15 +214,12 @@
                     <a
                       class="kengetal-value-link kengetal-focus-link"
                       href="#{{ row.modal_id }}"
-                      title="{{ value_source or category_label }}"
+                      title="{{ category_label }}{% if original_value is not none %} · origineel {{ original_value|euro }}{% endif %}{% if row.bdb_indexering %} · index {{ row.bdb_indexering|amount }}{% endif %}{% if value_source %} · {{ value_source }}{% endif %}"
                       data-modal-id="{{ row.modal_id }}"
                       data-field="{{ category_key }}"
                       data-preview-src="/kengetallen/{{ row.dataset_id }}/sheet-preview?sheet={{ row.project_sheet_name|urlencode }}&row={{ row.source_row }}&field={{ category_key|urlencode }}"
                     >
                       <strong>{{ value|euro }}</strong>
-                      {% if original_value is not none %}
-                        <small>{{ original_value|euro }} · index {{ row.bdb_indexering|amount if row.bdb_indexering else "-" }}</small>
-                      {% endif %}
                     </a>
                   {% else %}
                     -

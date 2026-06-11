@@ -1111,8 +1111,8 @@ textarea {
   --kg-date-col: 108px;
   --kg-period-col: 98px;
   --kg-index-col: 92px;
-  --kg-price-col: 124px;
-  --kg-action-col: 82px;
+  --kg-price-col: 112px;
+  --kg-action-col: 142px;
   overflow: hidden;
 }
 
@@ -1203,6 +1203,7 @@ textarea {
 }
 
 .kengetal-index-row {
+  position: relative;
   display: grid;
   grid-template-columns:
     var(--kg-project-col)
@@ -1213,7 +1214,7 @@ textarea {
     var(--kg-index-col)
     repeat(17, var(--kg-price-col))
     var(--kg-action-col);
-  column-gap: 10px;
+  column-gap: 6px;
   align-items: center;
   width: max-content;
   min-width: 100%;
@@ -1234,7 +1235,8 @@ textarea {
 .kengetal-index-head {
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 30;
+  isolation: isolate;
   min-height: 42px;
   color: #c9d9ed;
   background: #25465f;
@@ -1242,6 +1244,14 @@ textarea {
   font-size: 11px;
   font-weight: 900;
   text-transform: none;
+}
+
+.kengetal-index-head::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: #25465f;
 }
 
 .kengetal-index-row span {
@@ -1268,7 +1278,6 @@ textarea {
   text-align: left;
 }
 
-.kengetal-index-head span:nth-last-child(-n + 3),
 .button-cell {
   display: flex;
   align-items: center;
@@ -1322,12 +1331,25 @@ textarea {
 }
 
 .button-cell.col-action {
+  position: sticky;
+  right: 0;
+  z-index: 8;
   display: inline-flex;
   flex-direction: row;
   flex-wrap: nowrap;
   gap: 6px;
   align-items: center;
   justify-content: flex-start;
+  min-height: 32px;
+  padding-left: 8px;
+  background: #183d5a;
+  box-shadow: -10px 0 18px rgba(24, 61, 90, 0.85);
+}
+
+.kengetal-index-head .col-action {
+  z-index: 35;
+  background: #25465f;
+  box-shadow: -10px 0 18px rgba(37, 70, 95, 0.9);
 }
 
 .button-cell.col-action .mini-button {
@@ -1348,12 +1370,11 @@ textarea {
 
 .kengetal-value-link {
   display: grid;
-  gap: 1px;
   align-content: center;
   justify-items: end;
   width: 100%;
-  min-height: 30px;
-  padding: 3px 6px;
+  min-height: 24px;
+  padding: 2px 3px;
   border: 1px solid transparent;
   border-radius: 5px;
   color: #fff;
@@ -1362,18 +1383,12 @@ textarea {
 }
 
 .kengetal-value-link strong {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 900;
 }
 
 .kengetal-value-link small {
-  max-width: 100%;
-  overflow: visible;
-  color: #8bd5e6;
-  font-size: 9px;
-  font-weight: 800;
-  text-overflow: clip;
-  white-space: nowrap;
+  display: none;
 }
 
 .kengetal-value-link:hover {

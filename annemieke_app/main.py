@@ -888,9 +888,10 @@ def reference_sheet_preview(
       strong, small {{ display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; }}
       small {{ color: var(--muted); font-size: 12px; }}
       main {{ height: calc(100vh - 48px); overflow: auto; padding: 10px; }}
-      table {{ min-width: 0; width: 100%; table-layout: fixed; border-collapse: collapse; background: var(--panel); }}
-      th {{ position: sticky; top: 0; z-index: 8; padding: 6px; border: 1px solid rgba(126, 169, 219, 0.2); background: #25506a; background-clip: padding-box; color: #d8f6ff; font-size: 10px; text-align: left; box-shadow: 0 2px 0 rgba(126, 169, 219, .28), 0 10px 18px rgba(7, 19, 27, .48); }}
-      td {{ min-width: 0; padding: 5px 6px; border: 1px solid rgba(126, 169, 219, 0.2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }}
+      table {{ min-width: 0; width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; background: var(--panel); }}
+      thead {{ position: sticky; top: 0; z-index: 20; }}
+      th {{ padding: 7px 6px; border-right: 1px solid rgba(126, 169, 219, 0.28); border-bottom: 1px solid rgba(126, 169, 219, 0.32); background: #25506a; background-clip: padding-box; color: #d8f6ff; font-size: 10px; text-align: left; box-shadow: 0 2px 0 rgba(126, 169, 219, .28), 0 12px 18px rgba(7, 19, 27, .62); }}
+      td {{ min-width: 0; padding: 5px 6px; border-right: 1px solid rgba(126, 169, 219, 0.2); border-bottom: 1px solid rgba(126, 169, 219, 0.2); background: #102f49; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }}
       td.text {{ white-space: normal; }}
       th:nth-child(1), td:nth-child(1) {{ width: 48px; }}
       th:nth-child(3), td:nth-child(3) {{ width: 82px; }}
@@ -971,7 +972,7 @@ def reference_sheet_preview(
       table {{ min-width: 0; width: 100%; table-layout: fixed; border-collapse: collapse; background: var(--panel); }}
       td {{ max-width: 320px; min-width: 72px; padding: 5px 7px; border: 1px solid rgba(126, 169, 219, 0.2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }}
       tr:nth-child(odd) td {{ background: rgba(255, 255, 255, 0.025); }}
-      tr:first-child td {{ position: sticky; top: 0; z-index: 8; background: #25506a; background-clip: padding-box; font-weight: 700; box-shadow: 0 2px 0 rgba(126, 169, 219, .28), 0 10px 18px rgba(7, 19, 27, .48); }}
+      tr:first-child td {{ position: sticky; top: 0; z-index: 20; background: #25506a; background-clip: padding-box; font-weight: 700; box-shadow: 0 2px 0 rgba(126, 169, 219, .28), 0 12px 18px rgba(7, 19, 27, .62); }}
       td.empty {{ color: var(--muted); }}
     </style>
   </head>
