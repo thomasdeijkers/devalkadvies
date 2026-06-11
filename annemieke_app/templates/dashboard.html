@@ -12,6 +12,7 @@
   {% elif active_page == "indices" %}Indexering
   {% elif active_page == "jobs" %}Cronjobs
   {% elif active_page == "server" %}Server overzicht
+  {% elif active_page == "settings" %}Instellingen
   {% else %}Werkbak voor begrotingen
   {% endif %}
 {% endblock %}
@@ -900,6 +901,42 @@
         {% else %}
           <p class="muted">Nog geen cronjobs ingesteld.</p>
         {% endfor %}
+      </div>
+    </article>
+  </section>
+  {% endif %}
+
+  {% if active_page == "settings" %}
+  <section class="data-grid">
+    <article class="panel data-form-panel">
+      <span class="chip automatic">AI parsing</span>
+      <h3>OpenAI model kiezen</h3>
+      <p class="muted">Dit model wordt gebruikt voor nieuwe parsings en voor OpenAI herparse.</p>
+      <form action="/settings/openai" method="post" class="stack-form">
+        <select name="openai_model">
+          {% for option in openai_model_options %}
+            <option value="{{ option.value }}" {% if option.value == selected_openai_model %}selected{% endif %}>{{ option.label }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit">Instellingen opslaan</button>
+      </form>
+    </article>
+    <article class="panel">
+      <span class="chip">Huidige instelling</span>
+      <h3>Parser configuratie</h3>
+      <div class="input-overview">
+        <article>
+          <span>App naam</span>
+          <strong>{{ app_name }}</strong>
+        </article>
+        <article>
+          <span>OpenAI model</span>
+          <strong>{{ selected_openai_model }}</strong>
+        </article>
+        <article>
+          <span>API sleutel</span>
+          <strong>{% if openai_usage.enabled %}ingesteld{% else %}niet ingesteld{% endif %}</strong>
+        </article>
       </div>
     </article>
   </section>

@@ -21,6 +21,7 @@ from .exporter import budget_document_to_xlsx, control_model_document_to_xlsx, s
 from .index_provider import sync_price_index_series
 from .kengetallen import import_reference_lines
 from .models import (
+    AppSetting,
     AssessmentTemplate,
     BudgetLine,
     ExtractedField,
@@ -144,6 +145,14 @@ templates.env.filters["quantity"] = quantity
 templates.env.filters["unit_price"] = calculated_unit_price
 templates.env.filters["line_total"] = calculated_line_total
 
+OPENAI_MODEL_OPTIONS = [
+    {"value": "gpt-5", "label": "GPT-5 - hoogste kwaliteit"},
+    {"value": "gpt-5-mini", "label": "GPT-5 mini - sneller/goedkoper"},
+    {"value": "gpt-4.1", "label": "GPT-4.1 - stabiele fallback"},
+    {"value": "gpt-4.1-mini", "label": "GPT-4.1 mini - lichte fallback"},
+]
+OPENAI_MODEL_VALUES = {option["value"] for option in OPENAI_MODEL_OPTIONS}
+
 
 @app.on_event("startup")
 def startup() -> None:
@@ -246,6 +255,24 @@ def normalization_page(request: Request, session: Session = Depends(get_session)
     return _render_workspace(request, session, "normalisatie")
 
 
+@app.get("/settings", response_class=HTMLResponse)
+def settings_page(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
+    return _render_workspace(request, session, "settings")
+
+
+@app.post("/settings/openai")
+def update_openai_settings(
+    openai_model: str = Form("gpt-5"),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    model = openai_model.strip()
+    if model not in OPENAI_MODEL_VALUES:
+        model = "gpt-5"
+    _set_app_setting(session, "openai_model", model)
+    session.commit()
+    return RedirectResponse("/settings?notice=instellingen_opgeslagen", status_code=303)
+
+
 def _render_workspace(
     request: Request,
     session: Session,
@@ -318,6 +345,7 @@ def _render_workspace(
     flash_message = _flash_message(request)
     status_context = _status_context(session)
     consult_lines = _consult_lines(session, query, status, date_from, date_to, priced, min_score) if active_page == "consult" else []
+    selected_openai_model = _selected_openai_model(session)
 
     return templates.TemplateResponse(
         request=request,
@@ -358,6 +386,8 @@ def _render_workspace(
             "selected_priced": priced or "",
             "selected_min_score": min_score or "",
             "consult_lines": consult_lines,
+            "openai_model_options": OPENAI_MODEL_OPTIONS,
+            "selected_openai_model": selected_openai_model,
             "active_page": active_page,
             **status_context,
         },
@@ -3009,7 +3039,8 @@ def _parse_document_background(document_id: int, usage_source: str, force_openai
             return
 
         _set_parse_progress(session, document, 28, "PDF lezen, OCR/OpenAI voorbereiden")
-        parsed = parse_pdf(file_path, force_openai=force_openai)
+        openai_model = _selected_openai_model(session)
+        parsed = parse_pdf(file_path, force_openai=force_openai, openai_model=openai_model)
         _set_parse_progress(session, document, 76, f"{len(parsed.budget_lines)} regels herkend")
         document.source = parsed.parse_method
         document.parsed_text = parsed.text
@@ -3514,7 +3545,7 @@ def _assessment_note(template_id: str, reference_dataset_id: str) -> str:
 def _record_openai_usage(session: Session, source: str, source_id: int, usage: dict | None) -> None:
     if not usage:
         return
-    model = os.getenv("OPENAI_MODEL", "gpt-5").strip() or "gpt-5"
+    model = str(usage.get("model") or _selected_openai_model(session))
     event = OpenAIUsageEvent(
         source=source,
         source_id=source_id,
@@ -3586,8 +3617,32 @@ def _openai_usage_summary(session: Session) -> dict[str, object]:
         "total_requests": int(total_requests),
         "month_tokens": int(month_tokens),
         "month_cost_usd": Decimal(str(month_cost or 0)),
-        "model": os.getenv("OPENAI_MODEL", "gpt-5"),
+        "model": _selected_openai_model(session),
     }
+
+
+def _selected_openai_model(session: Session) -> str:
+    model = _get_app_setting(session, "openai_model", os.getenv("OPENAI_MODEL", "gpt-5"))
+    model = (model or "gpt-5").strip()
+    if model not in OPENAI_MODEL_VALUES:
+        return "gpt-5"
+    return model
+
+
+def _get_app_setting(session: Session, key: str, default: str = "") -> str:
+    setting = session.get(AppSetting, key)
+    if setting is None:
+        return default
+    return setting.value or default
+
+
+def _set_app_setting(session: Session, key: str, value: str) -> AppSetting:
+    setting = session.get(AppSetting, key)
+    if setting is None:
+        setting = AppSetting(key=key)
+        session.add(setting)
+    setting.value = value
+    return setting
 
 
 def _server_info(db_status: dict[str, object]) -> dict[str, object]:

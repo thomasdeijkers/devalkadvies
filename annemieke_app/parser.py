@@ -62,7 +62,7 @@ class ParsedBudgetLine:
     raw_text: str = ""
 
 
-def parse_pdf(path: Path, force_openai: bool = False) -> ParsedPdf:
+def parse_pdf(path: Path, force_openai: bool = False, openai_model: str | None = None) -> ParsedPdf:
     text = _extract_pdf_text(path)
     parse_method = "pdf_text"
     notes = None
@@ -78,7 +78,7 @@ def parse_pdf(path: Path, force_openai: bool = False) -> ParsedPdf:
     confidence = _line_confidence(budget_lines)
 
     if _openai_enabled() and (force_openai or confidence < _openai_threshold()):
-        openai_result = _parse_budget_with_openai(path, text)
+        openai_result = _parse_budget_with_openai(path, text, openai_model=openai_model)
         if openai_result and openai_result.budget_lines and (
             force_openai or len(openai_result.budget_lines) >= max(1, int(len(budget_lines) * 0.8))
         ):
@@ -344,10 +344,10 @@ def _line_confidence(lines: list[ParsedBudgetLine]) -> int:
     return min(95, int((sum(scores) / len(scores)) + (complete / len(lines)) * 20))
 
 
-def _parse_budget_with_openai(path: Path, text: str) -> ParsedPdf | None:
+def _parse_budget_with_openai(path: Path, text: str, openai_model: str | None = None) -> ParsedPdf | None:
     import requests
 
-    model = os.getenv("OPENAI_MODEL", "gpt-5").strip() or "gpt-5"
+    model = (openai_model or os.getenv("OPENAI_MODEL", "gpt-5")).strip() or "gpt-5"
     content = [
         {
             "type": "input_text",
@@ -406,7 +406,7 @@ def _parse_budget_with_openai(path: Path, text: str) -> ParsedPdf | None:
             notes="Geparsed met OpenAI fallback. Controleer bedragen en kolommen.",
             parse_method="openai",
             confidence=85,
-            openai_usage=_normalize_usage(response_payload.get("usage") or {}),
+            openai_usage={**_normalize_usage(response_payload.get("usage") or {}), "model": model},
         )
     except Exception:
         return None
