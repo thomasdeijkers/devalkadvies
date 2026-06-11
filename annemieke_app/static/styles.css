@@ -1581,12 +1581,12 @@ textarea {
 }
 
 .modal-panel.kengetal-project-modal {
-  width: 96vw;
-  max-width: 1760px;
+  width: 99vw;
+  max-width: none;
   height: 94vh;
   max-height: 94vh;
   overflow: auto;
-  padding: 24px;
+  padding: 14px;
 }
 
 .kengetal-project-modal .eyebrow {
@@ -1604,7 +1604,7 @@ textarea {
 
 .kengetal-project-form {
   display: grid;
-  grid-template-columns: minmax(720px, 1.45fr) minmax(460px, 0.9fr);
+  grid-template-columns: minmax(1040px, 1fr) minmax(360px, 420px);
   gap: 12px;
   align-items: start;
 }
@@ -1677,8 +1677,8 @@ textarea {
 
 .kengetal-sheet-preview iframe {
   width: 100%;
-  height: calc(94vh - 176px);
-  min-height: 640px;
+  height: calc(94vh - 142px);
+  min-height: 680px;
   display: block;
   border: 1px solid rgba(126, 169, 219, 0.28);
   border-radius: 6px;
@@ -1698,10 +1698,10 @@ textarea {
 .kengetal-price-pair {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
+  gap: 3px;
   margin-top: 3px;
   color: #d8f6ff;
-  font-size: 10px;
+  font-size: 9px;
   font-style: normal;
   font-weight: 800;
   line-height: 1.2;
@@ -1710,7 +1710,7 @@ textarea {
 .kengetal-price-pair span {
   min-width: 0;
   overflow: visible;
-  padding: 4px 5px;
+  padding: 3px 4px;
   border: 1px solid rgba(126, 169, 219, 0.18);
   border-radius: 4px;
   background: rgba(2, 22, 43, 0.42);
@@ -2069,7 +2069,7 @@ textarea {
 }
 
 .modal-panel.wide.kengetal-project-modal {
-  width: min(96vw, 1760px);
+  width: 99vw;
   max-width: none;
   height: 94vh;
   max-height: 94vh;

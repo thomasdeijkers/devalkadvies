@@ -887,12 +887,15 @@ def reference_sheet_preview(
       header {{ position: sticky; top: 0; z-index: 2; padding: 10px 12px; border-bottom: 1px solid var(--line); background: rgba(7, 19, 27, 0.96); }}
       strong, small {{ display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; }}
       small {{ color: var(--muted); font-size: 12px; }}
-      main {{ height: calc(100vh - 52px); overflow: auto; padding: 10px; }}
-      table {{ min-width: 1180px; width: 100%; border-collapse: collapse; background: var(--panel); }}
-      th {{ position: sticky; top: 53px; z-index: 1; padding: 7px; border: 1px solid rgba(126, 169, 219, 0.2); background: var(--head); color: #d8f6ff; font-size: 11px; text-align: left; }}
-      td {{ max-width: 320px; min-width: 78px; padding: 6px 7px; border: 1px solid rgba(126, 169, 219, 0.2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }}
-      td.text {{ white-space: normal; min-width: 420px; }}
-      th:nth-child(5), th:nth-child(6), th:nth-child(7), td:nth-child(5), td:nth-child(6), td:nth-child(7) {{ min-width: 118px; text-align: right; }}
+      main {{ height: calc(100vh - 48px); overflow: auto; padding: 10px; }}
+      table {{ min-width: 0; width: 100%; table-layout: fixed; border-collapse: collapse; background: var(--panel); }}
+      th {{ position: sticky; top: 0; z-index: 1; padding: 6px; border: 1px solid rgba(126, 169, 219, 0.2); background: var(--head); color: #d8f6ff; font-size: 10px; text-align: left; }}
+      td {{ min-width: 0; padding: 5px 6px; border: 1px solid rgba(126, 169, 219, 0.2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }}
+      td.text {{ white-space: normal; }}
+      th:nth-child(1), td:nth-child(1) {{ width: 48px; }}
+      th:nth-child(3), td:nth-child(3) {{ width: 82px; }}
+      th:nth-child(4), td:nth-child(4) {{ width: 82px; }}
+      th:nth-child(5), th:nth-child(6), th:nth-child(7), td:nth-child(5), td:nth-child(6), td:nth-child(7) {{ width: 114px; text-align: right; }}
       tr:nth-child(odd) td {{ background: rgba(255, 255, 255, 0.025); }}
       tr.active-row td {{ background: rgba(31, 226, 135, .14); box-shadow: inset 0 0 0 1px rgba(31, 226, 135, .35); }}
       tr.active-category td {{ background: rgba(31, 226, 135, .1); box-shadow: inset 0 0 0 1px rgba(31, 226, 135, .24); }}
@@ -964,11 +967,11 @@ def reference_sheet_preview(
       header {{ position: sticky; top: 0; z-index: 2; padding: 10px 12px; border-bottom: 1px solid var(--line); background: rgba(7, 19, 27, 0.96); }}
       strong, small {{ display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
       small {{ color: var(--muted); font-size: 12px; }}
-      main {{ height: calc(100vh - 52px); overflow: auto; padding: 10px; }}
-      table {{ min-width: 1180px; border-collapse: collapse; background: var(--panel); }}
+      main {{ height: calc(100vh - 48px); overflow: auto; padding: 10px; }}
+      table {{ min-width: 0; width: 100%; table-layout: fixed; border-collapse: collapse; background: var(--panel); }}
       td {{ max-width: 320px; min-width: 72px; padding: 5px 7px; border: 1px solid rgba(126, 169, 219, 0.2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }}
       tr:nth-child(odd) td {{ background: rgba(255, 255, 255, 0.025); }}
-      tr:first-child td {{ position: sticky; top: 53px; z-index: 1; background: var(--head); font-weight: 700; }}
+      tr:first-child td {{ position: sticky; top: 0; z-index: 1; background: var(--head); font-weight: 700; }}
       td.empty {{ color: var(--muted); }}
     </style>
   </head>
